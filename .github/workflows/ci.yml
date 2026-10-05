@@ -51,10 +51,9 @@ jobs:
       - run: python -m django test tests --settings=tests.settings
 
   windows:
-    # The primary deployment target. Non-blocking until the suite has a track record there.
+    # The primary deployment target.
     name: Windows / Python 3.12 / Django 5.2
     runs-on: windows-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
