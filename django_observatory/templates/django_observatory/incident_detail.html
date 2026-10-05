@@ -1,0 +1,36 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Incident #{{ incident.pk }}{% endblock %}{% block heading %}Incident #{{ incident.pk }}: {{ incident.title }}{% endblock %}
+{% block sub %}<a href="{% url 'django_observatory:incidents' %}?range=all">Incidents</a> / detected <time datetime="{{ incident.detected_at|date:'c' }}">{{ incident.detected_at|date:'Y-m-d H:i:s' }}</time>{% endblock %}
+{% block content %}
+<div class="grid tiles">
+<div class="tile"><div class="k">Status</div><div class="v"><span class="badge {{ incident.status|tone }}" style="font-size:1rem">{{ incident.status }}</span></div></div>
+<div class="tile"><div class="k">Severity</div><div class="v"><span class="badge {{ incident.severity|tone }}" style="font-size:1rem">{{ incident.severity|upper }}</span></div></div>
+<div class="tile"><div class="k">Requests affected</div><div class="v">{{ incident.affected_requests }}</div></div>
+<div class="tile"><div class="k">Users affected</div><div class="v">{{ incident.affected_users }}</div><div class="d">identified in captured requests</div></div>
+<div class="tile"><div class="k">HTTP 5xx</div><div class="v">{{ incident.error_count }}</div></div>
+<div class="tile"><div class="k">Endpoints</div><div class="v">{{ incident.affected_endpoints|length }}</div></div>
+</div>
+<div class="card"><h2>Probable cause</h2>
+<div class="infer"><span class="tag">Inference · {{ incident.confidence }} confidence (score {{ incident.confidence_score|floatformat:2 }})</span>
+<div style="font-size:1.1rem"><strong>{{ incident.probable_cause }}</strong></div>
+<div class="note">Probable start: <time datetime="{{ incident.started_at|date:'c' }}">{{ incident.started_at|date:'Y-m-d H:i:s' }}</time>{% if incident.resolved_at %} · resolved <time datetime="{{ incident.resolved_at|date:'c' }}">{{ incident.resolved_at|date:'H:i:s' }}</time>{% endif %}</div>
+<div style="margin-top:6px"><strong>Recommended investigation:</strong> {{ incident.recommendation }}</div></div>
+<div class="facts" style="margin-top:12px"><span class="tag">Evidence supporting this inference (observed)</span><ul>{% for s in evidence %}<li>{{ s.description }}</li>{% empty %}<li>No supporting evidence beyond the signals below.</li>{% endfor %}</ul></div>
+{% if incident.alternatives %}<p class="note" style="margin:10px 0 0">Other hypotheses considered: {% for a in incident.alternatives %}{{ a.cause }} ({{ a.confidence }}, {{ a.score }}){% if not forloop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
+<p class="note" style="margin:6px 0 0">The cause is a rule-based inference from correlated telemetry, not a certainty. Verify it against the evidence.</p></div>
+<div class="card"><h2>Correlated signals <span class="note">(observed facts)</span></h2><table><thead><tr><th>Signal</th><th>Role</th><th>Source</th></tr></thead><tbody>
+{% for s in observed %}<tr><td>{{ s.description }}</td><td><span class="badge {% if s.relationship == 'cause' %}serious{% else %}plain{% endif %}">{{ s.relationship }}</span></td><td>{{ s.source }}</td></tr>{% endfor %}</tbody></table></div>
+<div class="grid two">{% for title, id, data in charts %}{% include "django_observatory/_chart.html" %}{% endfor %}</div>
+<div class="card" style="margin-top:14px"><h2>Relationships</h2>{{ graph|json_script:"g-inc" }}<div id="graph" data-graph="g-inc" class="table-wrap"></div></div>
+<div class="grid two">
+<div class="card"><h2>Affected endpoints</h2><table><tbody>{% for e in incident.affected_endpoints %}<tr><td class="mono"><a href="{% url 'django_observatory:requests' %}?q=route:&quot;{{ e.route|urlencode }}&quot;">{{ e.route }}</a></td></tr>{% empty %}<tr><td class="note">None identified.</td></tr>{% endfor %}</tbody></table></div>
+<div class="card"><h2>Exceptions during the incident</h2><table><tbody>{% for e in exceptions %}<tr><td><a href="{% url 'django_observatory:issue_detail' e.issue_id %}">#{{ e.issue_id }} {{ e.issue__title|truncatechars:70 }}</a></td><td class="num">{{ e.n }}</td></tr>{% empty %}<tr><td class="note">None captured.</td></tr>{% endfor %}</tbody></table></div>
+</div>
+<div class="card"><h2>Affected requests <span class="note">(worst first — open one to see its trace)</span></h2><div class="table-wrap"><table><thead><tr><th>Time</th><th>Request</th><th>Status</th><th class="num">Duration</th><th class="num">External</th><th class="num">SQL</th><th>User</th></tr></thead><tbody>
+{% for r in requests %}<tr><td class="nowrap"><a href="{% url 'django_observatory:request_detail' r.request_id %}"><time datetime="{{ r.timestamp|date:'c' }}">{{ r.timestamp|date:'H:i:s' }}</time></a></td><td class="mono">{{ r.method }} {{ r.route }}</td><td><span class="badge {{ r.status_code|tone:'status' }}">{{ r.status_code }}</span></td><td class="num">{{ r.duration_ms|ms }}</td><td class="num">{{ r.ext_ms|ms }}</td><td class="num">{{ r.db_ms|ms }}</td><td>{{ r.username }}</td></tr>{% empty %}<tr><td class="empty" colspan="7">No captured requests.</td></tr>{% endfor %}</tbody></table></div></div>
+{% if alerts %}<div class="card"><h2>Alerts grouped under this incident</h2><table><tbody>{% for a in alerts %}<tr><td><span class="badge {{ a.status|tone }}">{{ a.status }}</span></td><td>{{ a.title }}</td><td>{{ a.message }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+<div class="card"><h2>Response</h2>{% if perms_obs.manage_alerts %}<form method="post" class="grid">{% csrf_token %}
+<label>Status<select name="status">{% for s in statuses %}<option{% if s == incident.status %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+<label style="grid-column:1/-1">Notes<textarea name="notes" rows="3">{{ incident.notes }}</textarea></label>
+<div><button class="primary">Save</button></div></form>{% else %}<p>{{ incident.notes|default:"No notes."|linebreaksbr }}</p>{% endif %}</div>
+{% endblock %}

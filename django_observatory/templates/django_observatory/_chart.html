@@ -1,0 +1,1 @@
+<div class="card viz"><h2>{{ title }}{% if note %} <span class="note">{{ note }}</span>{% endif %}</h2>{{ data|json_script:id }}<div class="chart" data-chart="{{ id }}" data-title="{{ title }}"{% if height %} data-height="{{ height }}"{% endif %}></div></div>

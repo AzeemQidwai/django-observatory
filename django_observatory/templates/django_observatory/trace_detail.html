@@ -1,0 +1,17 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Trace {{ trace.trace_id|slice:":8" }}{% endblock %}{% block heading %}{{ trace.name }}{% endblock %}
+{% block sub %}<a href="{% url 'django_observatory:traces' %}">Traces</a> / <span class="mono">{{ trace.trace_id }}</span>{% endblock %}
+{% block tools %}{% if request_record %}<a class="btn" href="{% url 'django_observatory:request_detail' trace.request_id %}">Open request</a>{% endif %}{% endblock %}
+{% block content %}
+<div class="grid tiles">
+<div class="tile"><div class="k">Duration</div><div class="v">{{ trace.duration_ms|ms }}</div></div>
+<div class="tile"><div class="k">Spans</div><div class="v">{{ trace.span_count }}</div><div class="d">{% if trace.dropped_spans %}{{ trace.dropped_spans }} dropped (limit){% else %}&nbsp;{% endif %}</div></div>
+<div class="tile"><div class="k">Result</div><div class="v">{% if trace.error %}<span class="badge critical" style="font-size:1.1rem">ERROR</span>{% else %}<span class="badge good" style="font-size:1.1rem">OK</span>{% endif %}</div></div>
+<div class="tile"><div class="k">Kind</div><div class="v" style="font-size:1.1rem">{{ trace.kind }}</div><div class="d"><time datetime="{{ trace.timestamp|date:'c' }}">{{ trace.timestamp|date:'Y-m-d H:i:s' }}</time></div></div>
+</div>
+{% if dominant %}<div class="card"><div class="facts"><span class="tag">Observed</span><div>Dominant latency contributor: <strong>{{ dominant.name|truncatechars:90 }}</strong> — {{ dominant.duration_ms|ms }} of {{ trace.duration_ms|ms }}.</div></div></div>{% endif %}
+<div class="card"><h2>Waterfall</h2>{% include "django_observatory/_waterfall.html" %}</div>
+{% if exceptions %}<div class="card"><h2>Exceptions</h2><table><tbody>{% for e in exceptions %}<tr><td class="mono"><a href="{% url 'django_observatory:exception_detail' e.pk %}">{{ e.exc_type }}</a></td><td>{{ e.message|truncatechars:200 }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+<div class="card"><h2>Span attributes</h2><div class="table-wrap"><table><thead><tr><th>Span</th><th>Kind</th><th class="num">Duration</th><th>Attributes</th></tr></thead><tbody>
+{% for s in waterfall %}<tr><td class="mono clip">{{ s.name|truncatechars:80 }}</td><td>{{ s.kind }}</td><td class="num">{{ s.duration }}</td><td class="mono" style="white-space:normal">{% for k, v in s.attributes.items %}{% if v != "" and v != None %}{{ k }}={{ v }} {% endif %}{% endfor %}</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}

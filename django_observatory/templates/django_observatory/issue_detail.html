@@ -1,0 +1,32 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Issue #{{ issue.pk }}{% endblock %}{% block heading %}Issue #{{ issue.pk }}: {{ issue.title|truncatechars:90 }}{% endblock %}
+{% block sub %}<a href="{% url 'django_observatory:issues' %}?range=all">Issues</a> / <span class="mono">{{ issue.culprit }}</span>{% endblock %}
+{% block tools %}{% include "django_observatory/_range.html" %}{% endblock %}
+{% block content %}
+<div class="grid tiles">
+<div class="tile"><div class="k">Status</div><div class="v"><span class="badge {{ issue.status|tone }}" style="font-size:1rem">{{ issue.status }}</span></div></div>
+<div class="tile"><div class="k">Occurrences</div><div class="v">{{ issue.occurrence_count }}</div></div>
+<div class="tile"><div class="k">Affected users</div><div class="v">{{ users }}</div></div>
+<div class="tile"><div class="k">Affected endpoints</div><div class="v">{{ endpoints|length }}</div></div>
+<div class="tile"><div class="k">First seen</div><div class="v" style="font-size:1rem"><time datetime="{{ issue.first_seen|date:'c' }}">{{ issue.first_seen|date:'Y-m-d H:i' }}</time></div><div class="d">{{ issue.first_release }}</div></div>
+<div class="tile"><div class="k">Last seen</div><div class="v" style="font-size:1rem"><time datetime="{{ issue.last_seen|date:'c' }}">{{ issue.last_seen|date:'Y-m-d H:i' }}</time></div><div class="d">{{ issue.last_release }}</div></div>
+</div>
+{% include "django_observatory/_chart.html" with title="Occurrences" id="c-occ" data=chart %}
+<div class="grid two">
+<div class="card"><h2>Triage</h2>{% if perms_obs.manage_alerts %}<form method="post" class="grid">{% csrf_token %}
+<label>Status<select name="status">{% for s in statuses %}<option{% if s == issue.status %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+<label>Assignee<input type="text" name="assignee" value="{{ issue.assignee }}" maxlength="150"></label>
+<label style="grid-column:1/-1">Notes<textarea name="notes" rows="3">{{ issue.notes }}</textarea></label>
+<div><button class="primary">Save</button></div></form>
+<p class="note">A resolved issue that occurs again is automatically marked REGRESSED.</p>
+{% else %}<dl class="kv"><dt>Assignee</dt><dd>{{ issue.assignee|default:"–" }}</dd><dt>Notes</dt><dd>{{ issue.notes|default:"–"|linebreaksbr }}</dd></dl>{% endif %}</div>
+<div class="card"><h2>Affected endpoints</h2><table><tbody>{% for e in endpoints %}<tr><td class="mono">{{ e.endpoint }}</td><td class="num">{{ e.n }}</td></tr>{% empty %}<tr><td class="note">Raised outside HTTP requests.</td></tr>{% endfor %}</tbody></table>
+<h3 style="margin-top:12px">Releases</h3><table><tbody>{% for r in releases %}<tr><td>{{ r.release|default:"(none)" }}</td><td class="num">{{ r.n }}</td></tr>{% endfor %}</tbody></table></div>
+</div>
+{% if latest %}<div class="card stack"><div class="top" style="margin-bottom:6px"><h2 style="margin:0">Latest occurrence</h2><button type="button" data-copy="#traceback">Copy traceback</button></div><pre>{{ latest.message }}</pre><pre id="traceback" hidden>{{ latest.stacktrace }}</pre>
+{% for f in latest.frames %}{% if f.in_app %}<div class="frame"><span class="mono">{{ f.file }}:{{ f.line }}</span> in <strong class="mono">{{ f.function }}</strong><code>{{ f.code }}</code></div>{% endif %}{% endfor %}
+<p style="margin:10px 0 0"><a href="{% url 'django_observatory:exception_detail' latest.pk %}">Full stack trace and breadcrumbs →</a></p></div>{% endif %}
+<div class="card"><h2>Recent occurrences</h2><table><thead><tr><th>Time</th><th>Endpoint</th><th>User</th><th>Request</th></tr></thead><tbody>
+{% for e in recent %}<tr><td class="nowrap"><a href="{% url 'django_observatory:exception_detail' e.pk %}"><time datetime="{{ e.timestamp|date:'c' }}">{{ e.timestamp|date:'Y-m-d H:i:s' }}</time></a></td><td class="mono">{{ e.method }} {{ e.endpoint }}</td><td>{{ e.user_id|default:"–" }}</td><td class="mono">{% if e.request_id %}<a href="{% url 'django_observatory:request_detail' e.request_id %}">{{ e.request_id|shortid }}</a>{% endif %}</td></tr>{% endfor %}</tbody></table>
+<p style="margin:10px 0 0"><a href="{% url 'django_observatory:exceptions' %}?q=issue:{{ issue.pk }}&amp;range=all">All occurrences →</a></p></div>
+{% endblock %}

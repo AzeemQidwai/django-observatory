@@ -1,0 +1,19 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}External APIs{% endblock %}{% block heading %}External services{% endblock %}
+{% block sub %}Outbound HTTP calls made by the application{% endblock %}
+{% block tools %}{% include "django_observatory/_range.html" %}<a class="btn" href="{% url 'django_observatory:external_calls' %}">All calls</a>{% endblock %}
+{% block content %}
+<div class="grid two" style="margin-bottom:14px">
+{% include "django_observatory/_hbars.html" with title="Latency by service" note="P95" bars=by_latency %}
+{% include "django_observatory/_hbars.html" with title="Failure rate by service" bars=by_errors %}
+</div>
+<div class="card"><div class="table-wrap"><table><thead><tr><th>Service</th><th class="num">Calls</th><th class="num">Average</th><th class="num">P95</th><th class="num">Max</th><th class="num">Errors</th><th></th></tr></thead><tbody>
+{% for s in services %}<tr><td><a href="?service={{ s.service|urlencode }}&amp;range={{ range }}"><strong>{{ s.service }}</strong></a></td><td class="num">{{ s.calls }}</td><td class="num">{{ s.avg|ms }}</td><td class="num">{{ s.p95|ms }}</td><td class="num">{{ s.max|ms }}</td>
+<td class="num">{% if s.errors >= 5 %}<span class="badge critical">{{ s.errors|floatformat:1 }}%</span>{% else %}{{ s.errors|floatformat:1 }}%{% endif %}</td>
+<td><a href="{% url 'django_observatory:external_calls' %}?q=service:&quot;{{ s.service|urlencode }}&quot;&amp;range={{ range }}">calls</a></td></tr>
+{% empty %}<tr><td class="empty" colspan="7">No outbound HTTP calls recorded in this time range.</td></tr>{% endfor %}</tbody></table></div></div>
+{% if chart %}<h2 style="margin:18px 0 10px">{{ selected }}</h2><div class="grid two">
+{% include "django_observatory/_chart.html" with title="Latency" id="c-svc" data=chart %}
+{% include "django_observatory/_chart.html" with title="Calls by outcome" id="c-out" data=outcomes %}
+</div><div style="margin-top:14px">{% include "django_observatory/_chart.html" with title="Call duration distribution" id="c-sd" data=distribution %}</div>{% endif %}
+{% endblock %}

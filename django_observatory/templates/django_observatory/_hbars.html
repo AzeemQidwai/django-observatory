@@ -1,0 +1,3 @@
+<div class="card viz"><h2>{{ title }}{% if note %} <span class="note">{{ note }}</span>{% endif %}</h2>{% if bars %}<div class="bars rank">{% for b in bars %}
+{% if b.href %}<a class="bar-row" href="{{ b.href }}" data-tip="{{ b.label }} | {{ b.tip }}">{% else %}<div class="bar-row" data-tip="{{ b.label }} | {{ b.tip }}">{% endif %}<div class="lbl{% if mono %} mono{% endif %}">{{ b.label }}</div><div class="val">{{ b.text }}</div><div class="track k-{{ b.kind|default:'db' }}"><i style="left:0;width:{{ b.pct|floatformat:1 }}%"></i></div>{% if b.href %}</a>{% else %}</div>{% endif %}{% endfor %}</div>
+{% else %}<p class="empty">No data in this time range.</p>{% endif %}</div>

@@ -1,0 +1,12 @@
+{% if waterfall %}<div class="bars wf" role="list" aria-label="Trace timeline">{% for s in waterfall %}
+<div class="bar-row{% if s.status == 'error' %} err{% endif %}" role="listitem" data-tip="{{ s.name|truncatechars:110 }} | {{ s.kind }} · {{ s.duration }}{% if s.status == 'error' %} · error{% endif %}">
+  <div class="lbl" style="padding-left:{{ s.pad }}px">{% if s.status == 'error' %}✕ {% endif %}{{ s.name }}</div>
+  <div class="track k-{{ s.kind }}"><i style="left:{{ s.left|floatformat:2 }}%;width:{{ s.width|floatformat:2 }}%"></i></div>
+  <div class="val">{{ s.duration }}</div>
+</div>{% endfor %}</div>
+<p class="note" style="margin:10px 0 0"><i class="k-db" style="display:inline-block;width:10px;height:10px;border-radius:2px"></i> SQL &nbsp;
+<i class="k-http" style="display:inline-block;width:10px;height:10px;border-radius:2px"></i> External HTTP &nbsp;
+<i class="k-view" style="display:inline-block;width:10px;height:10px;border-radius:2px"></i> View &nbsp;
+<i class="k-template" style="display:inline-block;width:10px;height:10px;border-radius:2px"></i> Template &nbsp;
+<i class="k-custom" style="display:inline-block;width:10px;height:10px;border-radius:2px"></i> Custom span</p>
+{% else %}<p class="empty">No spans were stored for this trace.</p>{% endif %}

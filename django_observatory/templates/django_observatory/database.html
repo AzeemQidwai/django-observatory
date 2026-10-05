@@ -1,0 +1,18 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Database{% endblock %}{% block heading %}Database performance{% endblock %}
+{% block sub %}Totals count every query; the statement table is built from captured queries.{% endblock %}
+{% block tools %}{% include "django_observatory/_range.html" %}<a class="btn" href="{% url 'django_observatory:queries' %}">All captured SQL</a>{% endblock %}
+{% block content %}
+<div class="grid tiles">{% for t in tiles %}{% if t.href %}<a class="tile" href="{{ t.href }}">{% else %}<div class="tile">{% endif %}<div class="k">{{ t.k }}</div><div class="v">{{ t.v }}</div>{% if t.href %}</a>{% else %}</div>{% endif %}{% endfor %}</div>
+<div class="grid two">
+{% include "django_observatory/_chart.html" with title="Query latency" id="c-dbl" data=chart %}
+{% include "django_observatory/_chart.html" with title="Query volume" id="c-dbv" data=volume %}
+{% include "django_observatory/_chart.html" with title="Query duration distribution" note="all queries" id="c-dbd" data=distribution %}
+{% include "django_observatory/_hbars.html" with title="Heaviest statements" note="total time, captured queries" bars=heaviest mono=1 %}
+</div>
+<div style="margin-top:14px">{% include "django_observatory/_hbars.html" with title="Most executed statements" note="calls, captured queries" bars=most_called mono=1 %}</div>
+<div class="card" style="margin-top:14px"><h2>Statements by total time</h2><div class="table-wrap"><table><thead><tr><th>Statement (normalised)</th><th class="num">Calls</th><th class="num">Avg</th><th class="num">P95</th><th class="num">Max</th><th class="num">Total</th><th>Flags</th></tr></thead><tbody>
+{% for g in groups %}<tr><td class="mono" style="white-space:normal"><a href="{% url 'django_observatory:queries' %}?q=fingerprint:{{ g.fingerprint }}&amp;range={{ range }}" title="Executions with their originating requests">{{ g.sql|truncatechars:220 }}</a>{% if g.route %}<div class="note">e.g. from {{ g.route }}</div>{% endif %}</td>
+<td class="num">{{ g.calls }}</td><td class="num">{{ g.avg|ms }}</td><td class="num">{% if g.p95 != None %}{{ g.p95|ms }}{% else %}–{% endif %}</td><td class="num">{{ g.max|ms }}</td><td class="num">{{ g.total|ms }}</td>
+<td class="nowrap">{% if g.slow %}<span class="badge warning">{{ g.slow }} slow</span>{% endif %}{% if g.failed %} <span class="badge critical">{{ g.failed }} failed</span>{% endif %}</td></tr>
+{% empty %}<tr><td class="empty" colspan="7">No queries captured in this time range.</td></tr>{% endfor %}</tbody></table></div></div>{% endblock %}

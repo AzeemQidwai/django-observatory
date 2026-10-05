@@ -1,0 +1,46 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}{{ req.method }} {{ req.path }}{% endblock %}{% block heading %}{{ req.method }} {{ req.path }}{% endblock %}
+{% block sub %}<a href="{% url 'django_observatory:requests' %}">Requests</a> / <span class="mono">{{ req.request_id }}</span>{% endblock %}
+{% block tools %}<a class="btn" href="{% url 'django_observatory:trace_detail' req.trace_id %}">Open trace</a>{% endblock %}
+{% block content %}
+<div class="grid tiles">
+<div class="tile"><div class="k">Status</div><div class="v"><span class="badge {{ req.status_code|tone:'status' }}" style="font-size:1.1rem">{{ req.status_code }}</span></div></div>
+<div class="tile"><div class="k">Duration</div><div class="v">{{ req.duration_ms|ms }}</div></div>
+<div class="tile"><div class="k">SQL queries</div><div class="v">{{ req.db_count }}</div><div class="d">{{ req.db_ms|ms }}{% if req.slow_queries %} · {{ req.slow_queries }} slow{% endif %}</div></div>
+<div class="tile"><div class="k">External calls</div><div class="v">{{ req.ext_count }}</div><div class="d">{{ req.ext_ms|ms }}</div></div>
+<div class="tile"><div class="k">User</div><div class="v" style="font-size:1.1rem">{{ req.username|default:"anonymous" }}</div><div class="d">{{ req.ip_address }}</div></div>
+</div>
+{% if why %}<div class="card"><h2>{{ why.question }}</h2>
+<div class="infer"><span class="tag">Inference · {{ why.confidence }} confidence</span><div><strong>Primary suspected cause: {{ why.suspect }}</strong></div></div>
+<div class="facts" style="margin-top:10px"><span class="tag">Observed evidence</span><ul>{% for f in why.facts %}<li>{{ f }}</li>{% endfor %}</ul></div></div>{% endif %}
+<div class="card"><h2>Latency breakdown</h2><div class="bars">{% for b in breakdown %}
+<div class="bar-row" data-tip="{{ b.label }} | {{ b.text }} · {{ b.pct|floatformat:0 }}% of the request"><div class="lbl">{{ b.label }}</div><div class="track k-{{ b.kind }}"><i style="left:0;width:{{ b.pct|floatformat:1 }}%"></i></div><div class="val">{{ b.text }} · {{ b.pct|floatformat:0 }}%</div></div>{% endfor %}</div></div>
+<div class="card"><h2>Timeline</h2>{% include "django_observatory/_waterfall.html" %}</div>
+{% if exceptions %}<div class="card"><h2>Exceptions</h2><table><tbody>{% for e in exceptions %}<tr>
+<td class="mono"><a href="{% url 'django_observatory:exception_detail' e.pk %}">{{ e.exc_type }}</a></td><td class="clip">{{ e.message|truncatechars:160 }}</td>
+<td class="mono">{{ e.file_name|basename }}:{{ e.line_number }} in {{ e.function }}</td><td><a href="{% url 'django_observatory:issue_detail' e.issue_id %}">Issue #{{ e.issue_id }}</a></td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if externals %}<div class="card"><h2>External calls</h2><div class="table-wrap"><table><thead><tr><th>Service</th><th>Call</th><th>Status</th><th class="num">Duration</th><th>Outcome</th></tr></thead><tbody>
+{% for e in externals %}<tr><td>{{ e.service }}</td><td class="mono clip">{{ e.method }} {{ e.host }}{{ e.path }}</td><td>{% if e.status_code %}<span class="badge {{ e.status_code|tone:'status' }}">{{ e.status_code }}</span>{% else %}–{% endif %}</td><td class="num">{{ e.duration_ms|ms }}</td>
+<td>{% if e.timeout %}<span class="badge critical">TIMEOUT</span>{% elif e.error %}<span class="badge critical">{{ e.exc_type|default:"ERROR" }}</span>{% else %}<span class="badge good">OK</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
+{% if queries %}<div class="card"><h2>SQL ({{ queries|length }} captured of {{ req.db_count }})</h2><div class="table-wrap"><table><thead><tr><th class="num">Duration</th><th>Database</th><th>Statement</th><th></th></tr></thead><tbody>
+{% for q in queries %}<tr><td class="num">{{ q.duration_ms|ms }}</td><td>{{ q.alias }}</td><td class="mono" style="white-space:normal">{{ q.sql|truncatechars:400 }}</td>
+<td class="nowrap">{% if q.is_slow %}<span class="badge warning">SLOW</span>{% endif %}{% if not q.success %}<span class="badge critical">FAILED</span>{% endif %} <a href="{% url 'django_observatory:queries' %}?q=fingerprint:{{ q.fingerprint }}&amp;range=7d" title="All executions of this statement">all</a></td></tr>{% endfor %}</tbody></table></div></div>{% endif %}
+{% if logs %}<div class="card"><h2>Logs</h2><table><tbody>{% for l in logs %}<tr><td class="nowrap"><a href="{% url 'django_observatory:log_detail' l.pk %}"><time datetime="{{ l.timestamp|date:'c' }}">{{ l.timestamp|date:'H:i:s' }}</time></a></td><td><span class="badge {{ l.level|tone:'level' }}">{{ l.level }}</span></td><td class="mono">{{ l.logger_name }}</td><td>{{ l.message|truncatechars:200 }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if security or audits %}<div class="card"><h2>Security &amp; audit</h2><table><tbody>
+{% for s in security %}<tr><td><span class="badge {{ s.severity|tone }}">{{ s.event }}</span></td><td>{{ s.username }}</td><td>{{ s.resource }}</td><td>{{ s.reason }}</td></tr>{% endfor %}
+{% for a in audits %}<tr><td><span class="badge plain">AUDIT {{ a.action }}</span></td><td>{{ a.username }}</td><td>{{ a.object_type }} #{{ a.object_id }}</td><td>{{ a.result }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+<div class="card"><h2>Relationships</h2>{{ graph|json_script:"g-req" }}<div id="graph" data-graph="g-req" class="table-wrap"></div></div>
+<div class="grid two">
+<div class="card"><h2>Overview</h2><dl class="kv">
+<dt>Time</dt><dd><time datetime="{{ req.timestamp|date:'c' }}">{{ req.timestamp|date:'Y-m-d H:i:s' }}</time></dd>
+<dt>Route</dt><dd class="mono">{{ req.route|default:"(unmatched)" }}</dd>
+<dt>View</dt><dd class="mono">{{ req.view_module }}.{{ req.view_name }}</dd>
+<dt>Trace ID</dt><dd class="mono">{{ req.trace_id }}</dd>
+<dt>Response</dt><dd>{{ req.content_type|default:"–" }}{% if req.response_size != None %} · {{ req.response_size|filesizeformat }}{% endif %}</dd>
+<dt>User agent</dt><dd>{{ req.user_agent|default:"–" }}</dd>
+<dt>Referrer</dt><dd>{{ req.referrer|default:"–" }}</dd>
+<dt>Deployment</dt><dd>{{ req.service }} · {{ req.environment }}{% if req.release %} · {{ req.release }}{% endif %}</dd>
+{% if req.query_params %}<dt>Query</dt><dd><pre>{{ req.query_params|pretty }}</pre></dd>{% endif %}
+{% if req.metadata %}<dt>Metadata</dt><dd><pre>{{ req.metadata|pretty }}</pre></dd>{% endif %}</dl></div>
+<div class="card"><h2>Request headers <span class="note">(sensitive values redacted)</span></h2><dl class="kv">{% for k, v in req.headers.items %}<dt class="mono">{{ k }}</dt><dd class="mono">{{ v }}</dd>{% empty %}<dd class="note">Header capture is disabled.</dd>{% endfor %}</dl></div>
+</div>{% endblock %}

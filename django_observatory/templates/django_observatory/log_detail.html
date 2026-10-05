@@ -1,0 +1,26 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Log event{% endblock %}{% block heading %}Log event{% endblock %}
+{% block sub %}<a href="{% url 'django_observatory:logs' %}">Logs</a> / #{{ event.pk }}{% endblock %}
+{% block content %}
+<div class="card"><span class="badge {{ event.level|tone:'level' }}">{{ event.level }}</span>
+<pre style="margin-top:8px">{{ event.message }}</pre></div>
+<div class="grid two">
+<div class="card"><h2>Context</h2><dl class="kv">
+<dt>Timestamp</dt><dd><time datetime="{{ event.timestamp|date:'c' }}">{{ event.timestamp|date:'Y-m-d H:i:s' }}</time></dd>
+<dt>Logger</dt><dd class="mono">{{ event.logger_name }}</dd>
+<dt>Category</dt><dd>{{ event.category }} ({{ event.event_type }})</dd>
+<dt>File</dt><dd class="mono">{{ event.file_name }}{% if event.line_number %}:{{ event.line_number }}{% endif %}</dd>
+<dt>Function</dt><dd class="mono">{{ event.module }}.{{ event.function }}</dd>
+<dt>User</dt><dd>{{ event.user_id|default:"–" }}</dd>
+<dt>Host</dt><dd>{{ event.hostname }} · pid {{ event.process_id }} · thread {{ event.thread_id }}</dd>
+<dt>Deployment</dt><dd>{{ event.service }} · {{ event.environment }}{% if event.release %} · {{ event.release }}{% endif %}</dd>
+</dl></div>
+<div class="card"><h2>Related</h2><dl class="kv">
+<dt>Request</dt><dd>{% if request_record %}<a href="{% url 'django_observatory:request_detail' event.request_id %}">{{ request_record.method }} {{ request_record.path }} → {{ request_record.status_code }}</a>{% else %}{{ event.request_id|default:"–" }}{% endif %}</dd>
+<dt>Trace</dt><dd class="mono">{% if event.trace_id %}<a href="{% url 'django_observatory:trace_detail' event.trace_id %}">{{ event.trace_id }}</a>{% else %}–{% endif %}</dd>
+<dt>Span</dt><dd class="mono">{{ event.span_id|default:"–" }}</dd>
+<dt>Exception</dt><dd>{% if exception %}<a href="{% url 'django_observatory:exception_detail' exception.pk %}">{{ exception.exc_type }}</a> · <a href="{% url 'django_observatory:issue_detail' exception.issue_id %}">Issue #{{ exception.issue_id }}</a>{% else %}–{% endif %}</dd>
+<dt>Similar</dt><dd><a href="{% url 'django_observatory:logs' %}?q=fingerprint:{{ event.fingerprint }}&amp;range=7d">Events with the same fingerprint</a></dd>
+</dl></div></div>
+{% if event.metadata %}<div class="card"><h2>Metadata</h2><pre>{{ event.metadata|pretty }}</pre></div>{% endif %}
+{% endblock %}

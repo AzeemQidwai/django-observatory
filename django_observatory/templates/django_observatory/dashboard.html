@@ -1,0 +1,26 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Dashboard{% endblock %}{% block heading %}Dashboard{% endblock %}
+{% block sub %}What is happening in {{ dims.service }} right now{% endblock %}
+{% block tools %}{% include "django_observatory/_range.html" %}<button type="button" data-live aria-pressed="false">Live</button>{% endblock %}
+{% block content %}<div id="results">
+{% if empty %}<div class="card"><h2>Waiting for the first events</h2><p class="note">Observability is installed. Make a request to your application and it will appear here.
+If nothing shows up, check <a href="{% url 'django_observatory:health' %}">Health</a> and that
+<code>django_observatory.middleware.ObservabilityMiddleware</code> is in <code>MIDDLEWARE</code>.</p></div>{% endif %}
+{% for inc in incidents %}<a class="card" style="display:block;border-color:var(--critical);color:var(--text)" href="{% url 'django_observatory:incident_detail' inc.pk %}">
+<span class="badge {{ inc.severity|tone }}">{{ inc.severity|upper }}</span> <strong>Incident #{{ inc.pk }}: {{ inc.title }}</strong>
+<div class="note">Probable cause ({{ inc.confidence }} confidence): {{ inc.probable_cause }} · {{ inc.affected_requests }} requests · {{ inc.affected_users }} users · {{ inc.error_count }} errors</div></a>{% endfor %}
+<div class="grid tiles">{% for t in tiles %}{% if t.href %}<a class="tile" href="{{ t.href }}"{% if t.alarm %} style="border-color:var(--critical)"{% endif %}>{% else %}<div class="tile">{% endif %}
+<div class="k">{{ t.k }}</div><div class="v">{{ t.v }}{% if t.alarm %} <span class="badge critical" style="vertical-align:middle">HIGH</span>{% endif %}</div>
+<div class="d">{% if t.note %}{{ t.note }}{% elif t.delta != None %}{% if t.delta > 0 %}▲ +{% elif t.delta < 0 %}▼ {% endif %}{{ t.delta|floatformat:1 }}{% if t.pp %} pts{% else %}%{% endif %} vs previous period{% else %}&nbsp;{% endif %}</div>
+{% if t.href %}</a>{% else %}</div>{% endif %}{% endfor %}</div>
+<div class="grid two">{% for title, id, data in charts %}{% include "django_observatory/_chart.html" %}{% endfor %}</div>
+<div class="grid three" style="margin-top:14px">
+{% include "django_observatory/_hbars.html" with title="Slowest endpoints" note="P95" bars=slowest mono=1 %}
+{% include "django_observatory/_hbars.html" with title="Busiest endpoints" note="requests" bars=busiest mono=1 %}
+{% include "django_observatory/_hbars.html" with title="Exceptions by type" bars=exc_types mono=1 %}
+</div>
+<div class="grid" style="margin-top:14px">
+<div class="card"><h2>Active issues</h2>{% if issues %}<table><thead><tr><th>Issue</th><th class="num">Events</th><th>Last seen</th></tr></thead><tbody>
+{% for i in issues %}<tr><td class="clip"><a href="{% url 'django_observatory:issue_detail' i.pk %}">{{ i.title|truncatechars:70 }}</a></td><td class="num">{{ i.occurrence_count }}</td><td class="nowrap"><time datetime="{{ i.last_seen|date:'c' }}">{{ i.last_seen|date:'H:i:s' }}</time></td></tr>{% endfor %}</tbody></table>
+{% else %}<p class="empty">No open issues.</p>{% endif %}</div>
+</div></div>{% endblock %}

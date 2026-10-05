@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/AzeemQidwai/django-observatory/security/advisories/new
+    about: Report privately. Please do not open a public issue.
+  - name: Question / help
+    url: https://github.com/AzeemQidwai/django-observatory/discussions
+    about: Ask usage questions in Discussions.

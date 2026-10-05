@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "django-observatory"
+dynamic = ["version"]
+description = "Django-native, offline-first observability: logs, requests, traces, SQL, exceptions, metrics, server resources, security/audit events, alerts and incident correlation in a built-in UI, with no separate infrastructure."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Azeem Qidwai" }]
+keywords = [
+    "django", "observability", "monitoring", "logging", "tracing", "apm", "metrics",
+    "error-tracking", "audit-log", "incident", "opentelemetry", "offline", "air-gapped",
+]
+dependencies = ["Django>=4.2"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: System :: Logging",
+    "Topic :: System :: Monitoring",
+]
+
+[project.optional-dependencies]
+# CPU / memory readings on every platform, plus per-process memory and CPU
+process = ["psutil>=5.9"]
+# adopt the ids of an active OpenTelemetry span
+otel = ["opentelemetry-api>=1.20"]
+all = ["psutil>=5.9", "opentelemetry-api>=1.20"]
+
+[project.urls]
+Homepage = "https://github.com/AzeemQidwai/django-observatory"
+Documentation = "https://github.com/AzeemQidwai/django-observatory/blob/main/docs/index.md"
+Repository = "https://github.com/AzeemQidwai/django-observatory"
+Issues = "https://github.com/AzeemQidwai/django-observatory/issues"
+Changelog = "https://github.com/AzeemQidwai/django-observatory/blob/main/CHANGELOG.md"
+
+[tool.setuptools.dynamic]
+version = { attr = "django_observatory.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["django_observatory*"]
+
+[tool.setuptools.package-data]
+django_observatory = ["templates/**/*.html", "static/**/*"]

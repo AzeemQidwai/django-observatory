@@ -1,0 +1,11 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Server{% endblock %}{% block heading %}Server resources{% endblock %}
+{% block sub %}CPU, memory and disk of the machine running the application{% if source %} · readings via {{ source }}{% endif %}{% endblock %}
+{% block tools %}{% if hosts|length > 1 %}<form method="get" class="inline"><input type="hidden" name="range" value="{{ range }}"><label class="skip" for="host">Server</label><select id="host" name="host" onchange="this.form.submit()">{% for h in hosts %}<option{% if h == host %} selected{% endif %}>{{ h }}</option>{% endfor %}</select></form>{% endif %}{% include "django_observatory/_range.html" %}<button type="button" data-live aria-pressed="false">Live</button>{% endblock %}
+{% block content %}<div id="results">
+{% if not tiles %}<div class="card"><h2>No readings yet</h2><p class="note">Server resources are sampled once a minute by the background worker, which starts with the first request the application handles. If nothing appears, CPU and memory may not be readable on this platform without <code>psutil</code> (<code>pip install psutil</code>); disk usage always works.</p></div>{% endif %}
+<div class="grid tiles">{% for t in tiles %}<div class="tile"{% if t.alarm %} style="border-color:var(--critical)"{% endif %}><div class="k">{{ t.k }}</div><div class="v">{{ t.v }}{% if t.alarm %} <span class="badge critical" style="vertical-align:middle">HIGH</span>{% endif %}</div><div class="d">{{ t.note|default:"&nbsp;" }}</div></div>{% endfor %}</div>
+{% if disks %}{% include "django_observatory/_hbars.html" with title="Disk space" note=host bars=disks mono=1 %}{% endif %}
+<div class="grid two" style="margin-top:14px">{% for title, id, data in charts %}{% include "django_observatory/_chart.html" %}{% endfor %}</div>
+<p class="note" style="margin-top:14px">Server <strong>{{ host }}</strong>. Thresholds: CPU {{ limits.CPU_PERCENT }}%, memory {{ limits.MEMORY_PERCENT }}%, disk {{ limits.DISK_PERCENT }}% (<code>OBSERVABILITY["SYSTEM"]</code>). Crossing them raises alerts and is used as evidence when incidents are correlated.{% if not have_psutil %} Per-process memory and CPU need the optional <code>psutil</code> package.{% endif %}</p>
+</div>{% endblock %}

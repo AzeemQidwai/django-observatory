@@ -1,0 +1,4 @@
+<form method="get" class="inline">{% for k, v in request.GET.items %}{% if k != 'range' and k != 'page' %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+<label class="skip" for="range">Time range</label>
+<select id="range" name="range" onchange="this.form.submit()">{% for k, m, label in ranges %}<option value="{{ k }}"{% if k == range %} selected{% endif %}>{{ label }}</option>{% endfor %}{% if allow_all %}<option value="all"{% if range == 'all' %} selected{% endif %}>All time</option>{% endif %}</select>
+<noscript><button>Apply</button></noscript></form>

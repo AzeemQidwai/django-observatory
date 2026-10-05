@@ -1,0 +1,55 @@
+{% load observatory %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{% block title %}Observability{% endblock %} · {{ dims.service }}</title>
+<link rel="stylesheet" href="{% url 'django_observatory:asset' 'app.css' %}?v={{ asset_version }}">
+<script src="{% url 'django_observatory:asset' 'app.js' %}?v={{ asset_version }}" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="app">
+<aside class="side">
+  <a class="brand" href="{% url 'django_observatory:dashboard' %}">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>Observability</a>
+  <nav aria-label="Sections">
+    <a href="{% url 'django_observatory:dashboard' %}"{% if nav == 'dashboard' %} aria-current="page"{% endif %}>Dashboard</a>
+    <h3>Explore</h3>
+    {% if perms_obs.view_logs %}<a href="{% url 'django_observatory:logs' %}"{% if nav == 'logs' %} aria-current="page"{% endif %}>Logs</a>{% endif %}
+    {% if perms_obs.view_requests %}<a href="{% url 'django_observatory:requests' %}"{% if nav == 'requests' %} aria-current="page"{% endif %}>Requests</a>{% endif %}
+    {% if perms_obs.view_traces %}<a href="{% url 'django_observatory:traces' %}"{% if nav == 'traces' %} aria-current="page"{% endif %}>Traces</a>{% endif %}
+    <a href="{% url 'django_observatory:search' %}"{% if nav == 'search' %} aria-current="page"{% endif %}>Search</a>
+    {% if perms_obs.view_exceptions %}<h3>Errors</h3>
+    <a href="{% url 'django_observatory:exceptions' %}"{% if nav == 'exceptions' %} aria-current="page"{% endif %}>Exceptions</a>
+    <a href="{% url 'django_observatory:issues' %}?range=all"{% if nav == 'issues' %} aria-current="page"{% endif %}>Issues{% if badges.issues %} <span class="count" title="open issues">{{ badges.issues }}</span>{% endif %}</a>{% endif %}
+    {% if perms_obs.view_metrics %}<h3>Performance</h3>
+    <a href="{% url 'django_observatory:performance' %}"{% if nav == 'performance' %} aria-current="page"{% endif %}>Endpoints</a>
+    <a href="{% url 'django_observatory:database' %}"{% if nav == 'database' or nav == 'queries' %} aria-current="page"{% endif %}>Database</a>
+    <a href="{% url 'django_observatory:external' %}"{% if nav == 'external' or nav == 'external_calls' %} aria-current="page"{% endif %}>External APIs</a>{% endif %}
+    {% if perms_obs.view_security_events or perms_obs.view_audit_events %}<h3>Security</h3>{% endif %}
+    {% if perms_obs.view_security_events %}<a href="{% url 'django_observatory:security' %}"{% if nav == 'security' %} aria-current="page"{% endif %}>Security Events</a>{% endif %}
+    {% if perms_obs.view_audit_events %}<a href="{% url 'django_observatory:audit' %}"{% if nav == 'audit' %} aria-current="page"{% endif %}>Audit</a>{% endif %}
+    <h3>Monitoring</h3>
+    {% if perms_obs.view_metrics %}<a href="{% url 'django_observatory:metrics' %}"{% if nav == 'metrics' %} aria-current="page"{% endif %}>Metrics</a>{% endif %}
+    {% if perms_obs.view_metrics %}<a href="{% url 'django_observatory:system' %}"{% if nav == 'system' %} aria-current="page"{% endif %}>Server</a>{% endif %}
+    <a href="{% url 'django_observatory:alerts' %}"{% if nav == 'alerts' or nav == 'alert_history' %} aria-current="page"{% endif %}>Alerts{% if badges.alerts %} <span class="count" title="firing alerts">{{ badges.alerts }}</span>{% endif %}</a>
+    <a href="{% url 'django_observatory:incidents' %}?range=all"{% if nav == 'incidents' %} aria-current="page"{% endif %}>Incidents{% if badges.incidents %} <span class="count" title="open incidents">{{ badges.incidents }}</span>{% endif %}</a>
+    <a href="{% url 'django_observatory:health' %}"{% if nav == 'health' %} aria-current="page"{% endif %}>Health</a>
+    {% if perms_obs.manage_observability_settings %}<h3>Administration</h3>
+    <a href="{% url 'django_observatory:settings' %}"{% if nav == 'settings' %} aria-current="page"{% endif %}>Settings &amp; System</a>{% endif %}
+  </nav>
+  <div class="meta-env">{{ dims.service }} · {{ dims.environment }}{% if dims.release %}<br>release {{ dims.release }}{% endif %}<br>
+    <button type="button" data-theme-toggle style="margin-top:8px">Light / dark</button></div>
+</aside>
+<main class="main" id="main">
+  <div class="top">
+    <div><h1>{% block heading %}Observability{% endblock %}</h1><div class="sub">{% block sub %}{% endblock %}</div></div>
+    <div class="tools">{% block tools %}{% endblock %}</div>
+  </div>
+  {% block content %}{% endblock %}
+</main>
+</div>
+</body>
+</html>

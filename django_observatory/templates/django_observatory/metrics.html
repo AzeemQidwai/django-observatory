@@ -1,0 +1,15 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Metrics{% endblock %}{% block heading %}Metrics{% endblock %}
+{% block sub %}Built-in and application metrics (<code>metrics.increment / gauge / histogram / timer</code>){% endblock %}
+{% block tools %}{% include "django_observatory/_range.html" %}{% endblock %}
+{% block content %}<div class="grid" style="grid-template-columns:minmax(200px,280px) minmax(0,1fr)">
+<div class="card"><h2>Metrics</h2>{% for m in metrics %}<div><a class="mono" href="?name={{ m.name|urlencode }}&amp;range={{ range }}"{% if selected.name == m.name %} style="font-weight:700"{% endif %}>{{ m.name }}</a> <span class="note">{{ m.kind }}</span></div>{% empty %}<p class="note">No metrics recorded yet.</p>{% endfor %}</div>
+<div>{% if selected %}
+<div class="grid tiles"><div class="tile"><div class="k">Samples</div><div class="v">{{ total.count }}</div></div>
+{% if selected.kind == 'counter' %}<div class="tile"><div class="k">Total</div><div class="v">{{ total.sum|floatformat:"-2" }}</div></div>{% else %}
+<div class="tile"><div class="k">Average</div><div class="v">{{ total.avg|floatformat:2 }}</div></div><div class="tile"><div class="k">Min / max</div><div class="v" style="font-size:1.1rem">{{ total.min|floatformat:2 }} / {{ total.max|floatformat:2 }}</div></div>{% endif %}</div>
+{% include "django_observatory/_chart.html" with title=selected.name id="c-met" data=chart %}
+{% if distribution %}{% include "django_observatory/_chart.html" with title="Distribution" id="c-metd" data=distribution %}{% endif %}
+<div class="card"><h2>By labels</h2><table><thead><tr><th>Labels</th><th class="num">Samples</th><th class="num">Sum</th><th class="num">Avg</th><th class="num">P95</th><th class="num">Max</th></tr></thead><tbody>
+{% for s in series %}<tr><td class="mono">{{ s.labels }}</td><td class="num">{{ s.count }}</td><td class="num">{{ s.sum|floatformat:"-2" }}</td><td class="num">{{ s.avg|floatformat:2 }}</td><td class="num">{% if s.p95 != None %}{{ s.p95|floatformat:2 }}{% else %}–{% endif %}</td><td class="num">{% if s.max != None %}{{ s.max|floatformat:2 }}{% else %}–{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+{% else %}<div class="card"><p class="empty">Select a metric.</p></div>{% endif %}</div></div>{% endblock %}

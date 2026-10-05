@@ -1,0 +1,21 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}{{ exc.exc_type }}{% endblock %}{% block heading %}{{ exc.exc_type }}{% endblock %}
+{% block sub %}<a href="{% url 'django_observatory:exceptions' %}">Exceptions</a> / occurrence of <a href="{% url 'django_observatory:issue_detail' exc.issue_id %}">Issue #{{ exc.issue_id }}</a>{% endblock %}
+{% block content %}
+<div class="card"><pre>{{ exc.message }}</pre></div>
+<div class="grid two">
+<div class="card"><h2>Context</h2><dl class="kv">
+<dt>Time</dt><dd><time datetime="{{ exc.timestamp|date:'c' }}">{{ exc.timestamp|date:'Y-m-d H:i:s' }}</time></dd>
+<dt>Location</dt><dd class="mono">{{ exc.file_name }}:{{ exc.line_number }} in {{ exc.function }}</dd>
+<dt>Endpoint</dt><dd class="mono">{{ exc.method }} {{ exc.endpoint|default:"–" }}</dd>
+<dt>Handled</dt><dd>{{ exc.handled|yesno:"yes (logged by the application),no (unhandled)" }}</dd>
+<dt>User</dt><dd>{{ exc.user_id|default:"–" }}</dd>
+<dt>Request</dt><dd class="mono">{% if exc.request_id %}<a href="{% url 'django_observatory:request_detail' exc.request_id %}">{{ exc.request_id }}</a>{% else %}–{% endif %}</dd>
+<dt>Trace</dt><dd class="mono">{% if exc.trace_id %}<a href="{% url 'django_observatory:trace_detail' exc.trace_id %}">{{ exc.trace_id }}</a>{% else %}–{% endif %}</dd>
+<dt>Deployment</dt><dd>{{ exc.service }} · {{ exc.environment }}{% if exc.release %} · {{ exc.release }}{% endif %}</dd></dl></div>
+<div class="card"><h2>Breadcrumbs <span class="note">(what happened just before)</span></h2>{% if exc.breadcrumbs %}<ul class="crumbs">{% for c in exc.breadcrumbs %}<li><span class="mono note">+{{ forloop.counter }}</span><span class="badge {{ c.level|tone }}">{{ c.category }}</span><span>{{ c.message }}</span></li>{% endfor %}</ul>{% else %}<p class="note">No breadcrumbs (raised outside a request or task).</p>{% endif %}</div>
+</div>
+<div class="card stack"><div class="top" style="margin-bottom:6px"><h2 style="margin:0">Stack trace <span class="note">(most recent call last; application frames emphasised)</span></h2><button type="button" data-copy="#traceback">Copy traceback</button></div>
+{% for f in exc.frames %}<div class="frame{% if not f.in_app %} lib{% endif %}"><span class="mono">{{ f.file }}:{{ f.line }}</span> in <strong class="mono">{{ f.function }}</strong>{% if f.in_app %} <span class="badge plain">app</span>{% endif %}<code>{{ f.code }}</code></div>{% endfor %}
+<details style="margin-top:10px"><summary>Raw traceback</summary><pre id="traceback">{{ exc.stacktrace }}</pre></details></div>
+{% endblock %}

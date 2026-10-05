@@ -1,0 +1,12 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Health{% endblock %}{% block heading %}Observability health{% endblock %}
+{% block sub %}Is the observability pipeline itself working, and what does it cost? (this process){% endblock %}
+{% block content %}
+<div class="card"><span class="badge {{ report.status|tone }}" style="font-size:1rem">{{ report.status }}</span></div>
+<div class="card"><table><thead><tr><th>Component</th><th>Status</th><th>Detail</th></tr></thead><tbody>
+{% for c in report.checks %}<tr><td><strong>{{ c.name }}</strong></td><td><span class="badge {{ c.status|tone }}">{{ c.status }}</span></td><td>{{ c.detail }}</td></tr>{% endfor %}</tbody></table></div>
+<div class="grid two">
+<div class="card"><h2>Pipeline</h2><dl class="kv">{% for k, v in report.pipeline.items %}<dt>{{ k }}</dt><dd class="mono">{{ v }}</dd>{% endfor %}<dt>dropped metric series</dt><dd class="mono">{{ report.dropped_metric_series }}</dd></dl></div>
+<div class="card"><h2>Internal errors</h2><dl class="kv"><dt>Count</dt><dd>{{ report.internal_errors.count }}</dd><dt>Last</dt><dd>{{ report.internal_errors.last|default:"none" }}</dd></dl>
+<p class="note">Failures inside observability are isolated from the application and reported only on the <code>django_observatory.internal</code> logger.</p></div>
+</div>{% endblock %}

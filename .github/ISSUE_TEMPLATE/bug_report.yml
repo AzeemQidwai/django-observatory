@@ -1,0 +1,34 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting. **Do not paste secrets or production data.** For security vulnerabilities use the private process in SECURITY.md instead of an issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The smallest settings / code that shows the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: selftest
+    attributes:
+      label: Output of `python manage.py observability_test` and `observability_health`
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: django-observatory, Django, Python, database, operating system, web server
+      placeholder: "django-observatory 0.1.0, Django 5.2, Python 3.12, SQL Server 2019, Windows Server 2019, Waitress"
+    validations:
+      required: true

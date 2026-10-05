@@ -1,0 +1,29 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Alerts{% endblock %}{% block heading %}Alerts{% endblock %}
+{% block sub %}One alert per rule while a condition holds; re-notified only after its cooldown{% endblock %}
+{% block tools %}<a class="btn" href="{% url 'django_observatory:alert_history' %}?range=all">History</a>{% endblock %}
+{% block content %}
+{% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
+<div class="card"><h2>Active</h2><div class="table-wrap"><table><thead><tr><th>Status</th><th>Alert</th><th>Detail</th><th>Since</th><th>Incident</th><th></th></tr></thead><tbody>
+{% for a in active %}<tr><td><span class="badge {{ a.status|tone }}">{{ a.status }}</span></td><td><strong>{{ a.title }}</strong></td><td>{{ a.message }}</td>
+<td class="nowrap"><time datetime="{{ a.started_at|date:'c' }}">{{ a.started_at|date:'Y-m-d H:i' }}</time></td>
+<td>{% if a.incident_id %}<a href="{% url 'django_observatory:incident_detail' a.incident_id %}">#{{ a.incident_id }}</a>{% endif %}</td>
+<td class="nowrap">{% if can_manage %}<form method="post" class="inline">{% csrf_token %}<input type="hidden" name="id" value="{{ a.pk }}">{% if a.status == 'FIRING' %}<button name="action" value="ack">Acknowledge</button>{% endif %}<button name="action" value="resolve">Resolve</button></form>{% endif %}</td></tr>
+{% empty %}<tr><td class="empty" colspan="6">No active alerts.</td></tr>{% endfor %}</tbody></table></div></div>
+<div class="card"><h2>Rules</h2><div class="table-wrap"><table><thead><tr><th>Rule</th><th>Condition</th><th>Severity</th><th>Channels</th><th>State</th><th></th></tr></thead><tbody>
+{% for r in rules %}<tr><td><strong>{{ r.name }}</strong></td><td>{{ r.get_metric_display }}{% if r.custom_metric %} <span class="mono">{{ r.custom_metric }}</span>{% endif %} {{ r.operator }} {{ r.threshold|floatformat:"-2" }} over {{ r.window_minutes }} min</td>
+<td><span class="badge {{ r.severity|tone }}">{{ r.severity }}</span></td><td>in-app{% for c in r.channels %}, {{ c }}{% endfor %}</td><td>{{ r.enabled|yesno:"enabled,disabled" }}</td>
+<td class="nowrap">{% if can_manage %}<form method="post" class="inline">{% csrf_token %}<input type="hidden" name="id" value="{{ r.pk }}"><button name="action" value="toggle">{{ r.enabled|yesno:"Disable,Enable" }}</button><button name="action" value="delete">Delete</button></form>{% endif %}</td></tr>
+{% endfor %}</tbody></table></div></div>
+{% if can_manage %}<div class="card"><h2>New rule</h2><form method="post" class="grid">{% csrf_token %}<input type="hidden" name="action" value="create">
+<label>Name<input type="text" name="name" required maxlength="150"></label>
+<label>Metric<select name="metric">{% for k, label in metric_choices %}<option value="{{ k }}">{{ label }}</option>{% endfor %}</select></label>
+<label>Custom metric name<input type="text" name="custom_metric" placeholder="only for “Custom metric”"></label>
+<label>Operator<select name="operator"><option>&gt;</option><option>&gt;=</option><option>&lt;</option><option>&lt;=</option></select></label>
+<label>Threshold<input type="number" name="threshold" step="any" required></label>
+<label>Window (minutes)<input type="number" name="window_minutes" value="5" min="1" max="1440"></label>
+<label>Severity<select name="severity"><option>warning</option><option>critical</option></select></label>
+<label>Extra channels<span>{% for c in channels %}<input type="checkbox" name="channels" value="{{ c }}" id="ch-{{ c }}"> <span>{{ c }}</span> {% endfor %}</span></label>
+<div><button class="primary">Create rule</button></div></form>
+<p class="note">Email uses <code>ALERTS.EMAIL_TO</code> with Django's email backend; webhook posts JSON to <code>ALERTS.WEBHOOK_URL</code>.</p></div>{% endif %}
+{% endblock %}

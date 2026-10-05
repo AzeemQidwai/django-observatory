@@ -1,0 +1,29 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Endpoints{% endblock %}{% block heading %}Endpoint performance{% endblock %}
+{% block sub %}Computed from every request (not affected by sampling). DB / external averages come from captured requests.{% endblock %}
+{% block tools %}{% include "django_observatory/_range.html" %}{% endblock %}
+{% block content %}
+<div class="grid two">
+{% include "django_observatory/_chart.html" with title="Latency percentiles" id="p-lat" data=latency %}
+{% include "django_observatory/_chart.html" with title="Response time distribution" note="all requests" id="p-dist" data=distribution %}
+</div>
+<div class="grid two" style="margin-top:14px">
+{% include "django_observatory/_hbars.html" with title="Slowest endpoints" note="P95" bars=slowest mono=1 %}
+{% include "django_observatory/_hbars.html" with title="Where server time goes" note="requests × average duration" bars=time_share mono=1 %}
+{% include "django_observatory/_hbars.html" with title="Busiest endpoints" note="requests" bars=busiest mono=1 %}
+{% include "django_observatory/_hbars.html" with title="Highest error rate" note="HTTP 5xx" bars=failing mono=1 %}
+</div>
+<div class="card" style="margin-top:14px"><h2>All endpoints</h2><div class="table-wrap"><table><thead><tr><th>Route</th>
+<th class="num"><a href="?range={{ range }}&amp;sort=count">Requests{% if sort == 'count' %} ▼{% endif %}</a></th>
+<th class="num"><a href="?range={{ range }}&amp;sort=errors">Errors{% if sort == 'errors' %} ▼{% endif %}</a></th>
+<th class="num"><a href="?range={{ range }}&amp;sort=avg">Avg{% if sort == 'avg' %} ▼{% endif %}</a></th>
+<th class="num"><a href="?range={{ range }}&amp;sort=p50">P50{% if sort == 'p50' %} ▼{% endif %}</a></th>
+<th class="num"><a href="?range={{ range }}&amp;sort=p95">P95{% if sort == 'p95' %} ▼{% endif %}</a></th>
+<th class="num"><a href="?range={{ range }}&amp;sort=p99">P99{% if sort == 'p99' %} ▼{% endif %}</a></th>
+<th class="num"><a href="?range={{ range }}&amp;sort=max">Max{% if sort == 'max' %} ▼{% endif %}</a></th>
+<th class="num"><a href="?range={{ range }}&amp;sort=db">Avg SQL{% if sort == 'db' %} ▼{% endif %}</a></th>
+<th class="num"><a href="?range={{ range }}&amp;sort=ext">Avg external{% if sort == 'ext' %} ▼{% endif %}</a></th></tr></thead><tbody>
+{% for r in rows %}<tr><td class="mono"><a href="{% url 'django_observatory:requests' %}?q=route:&quot;{{ r.route|urlencode }}&quot;&amp;range={{ range }}">{{ r.route }}</a></td>
+<td class="num">{{ r.count }}</td><td class="num">{% if r.errors >= 5 %}<span class="badge critical">{{ r.errors|floatformat:1 }}%</span>{% else %}{{ r.errors|floatformat:1 }}%{% endif %}</td>
+<td class="num">{{ r.avg|ms }}</td><td class="num">{{ r.p50|ms }}</td><td class="num">{{ r.p95|ms }}</td><td class="num">{{ r.p99|ms }}</td><td class="num">{{ r.max|ms }}</td><td class="num">{{ r.db|ms }}</td><td class="num">{{ r.ext|ms }}</td></tr>
+{% empty %}<tr><td class="empty" colspan="10">No requests in this time range.</td></tr>{% endfor %}</tbody></table></div></div>{% endblock %}

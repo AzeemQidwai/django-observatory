@@ -1,0 +1,17 @@
+{% extends "django_observatory/base.html" %}{% load observatory %}
+{% block title %}Settings{% endblock %}{% block heading %}Settings &amp; system information{% endblock %}
+{% block content %}
+{% if message %}<div class="card" role="status">{{ message }}</div>{% endif %}
+<div class="grid two">
+<div class="card"><h2>Runtime overrides</h2><p class="note">Change these without redeploying. Leave blank to use the value from <code>settings.py</code>.</p>
+<form method="post" class="grid">{% csrf_token %}<input type="hidden" name="action" value="runtime">
+{% for r in runtime %}<label>{{ r.key }} <span class="note">effective: {{ r.effective }}</span><input type="number" step="any" min="0" name="{{ r.key }}" value="{{ r.value }}"></label>{% endfor %}
+<div><button class="primary">Save overrides</button></div></form></div>
+<div class="card"><h2>System</h2><dl class="kv">{% for k, v in system.items %}<dt>{{ k }}</dt><dd>{{ v }}</dd>{% endfor %}</dl></div>
+</div>
+<div class="card"><h2>Storage &amp; retention</h2><table><thead><tr><th>Data</th><th class="num">Rows</th><th>Oldest</th></tr></thead><tbody>
+{% for kind, s in stats.items %}<tr><td>{{ kind }}</td><td class="num">{{ s.rows }}</td><td>{% if s.oldest %}<time datetime="{{ s.oldest|date:'c' }}">{{ s.oldest|date:'Y-m-d H:i' }}</time>{% else %}–{% endif %}</td></tr>{% endfor %}</tbody></table>
+<p class="note">Retention (days): {% for k, v in retention.items %}{{ k }} {{ v }}{% if not forloop.last %} · {% endif %}{% endfor %}. Cleanup runs hourly in bounded batches.</p>
+{% if perms_obs.delete_observability_data %}<form method="post" class="inline">{% csrf_token %}<button name="action" value="cleanup">Run retention cleanup now</button></form>{% endif %}</div>
+<div class="card"><h2>Effective configuration <span class="note">(secrets redacted)</span></h2><pre>{{ config|pretty }}</pre></div>
+{% endblock %}

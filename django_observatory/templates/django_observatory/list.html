@@ -1,0 +1,27 @@
+{% extends "django_observatory/base.html" %}
+{% block title %}{{ table.title }}{% endblock %}{% block heading %}{{ table.title }}{% endblock %}
+{% block sub %}{{ table.subtitle }}{% endblock %}
+{% block tools %}{% if table.key == 'audit' %}<a class="btn" href="?verify=1">Verify integrity</a>{% endif %}
+{% if table.key == 'queries' %}<a class="btn" href="{% url 'django_observatory:database' %}">Statement summary</a>{% endif %}
+{% if table.key == 'external_calls' %}<a class="btn" href="{% url 'django_observatory:external' %}">Service summary</a>{% endif %}
+{% if can_export %}<a class="btn" href="?{{ qs }}&amp;export=csv">CSV</a><a class="btn" href="?{{ qs }}&amp;export=json">JSON</a><a class="btn" href="?{{ qs }}&amp;export=ndjson">NDJSON</a>{% endif %}
+<button type="button" data-live aria-pressed="false">Live</button>{% endblock %}
+{% block content %}
+<form method="get" class="filters" role="search">
+  <label class="skip" for="q">Query</label>
+  <input id="q" type="search" name="q" value="{{ q }}" placeholder='Filter, e.g.  {{ table.chips.0 }}   or free text' autocomplete="off" spellcheck="false">
+  <select name="range" aria-label="Time range">{% for k, m, label in ranges %}<option value="{{ k }}"{% if k == range %} selected{% endif %}>{{ label }}</option>{% endfor %}<option value="all"{% if range == 'all' %} selected{% endif %}>All time</option></select>
+  <button class="primary">Search</button>
+</form>
+<div class="chips">{% for c in table.chips %}<a class="chip" href="?q={{ c|urlencode }}&amp;range={{ range }}">{{ c }}</a>{% endfor %}
+<span class="note" title="{{ fields|join:', ' }}">Fields: {{ fields|join:", " }} · operators: = != &gt; &gt;= &lt; &lt;= AND OR NOT ( )</span></div>
+{% if error %}<div class="error-box" role="alert">{{ error }}</div>{% endif %}
+{% if verify %}<div class="card" role="status">{% if verify.1 %}<span class="badge critical">TAMPERING DETECTED</span> {{ verify.1|length }} of {{ verify.0 }} audit records fail verification (ids: {% for pk, why in verify.1|slice:":10" %}{{ pk }} {{ why }}{% if not forloop.last %}, {% endif %}{% endfor %}).{% else %}<span class="badge good">VERIFIED</span> {{ verify.0 }} audit records checked; the hash chain is intact.{% endif %}</div>{% endif %}
+<div id="results">
+{% if volume %}{% include "django_observatory/_chart.html" with title="Volume over time" id="c-vol" data=volume height=130 note=volume_note %}{% endif %}
+<div class="card"><div class="table-wrap"><table>
+<thead><tr>{% for label, attr, kind in columns %}<th{% if kind == 'ms' or kind == 'num' %} class="num"{% endif %}>{% if attr %}<a href="?q={{ q|urlencode }}&amp;range={{ range }}&amp;sort={% if sort == attr %}-{% endif %}{{ attr }}">{{ label }}{% if sort == attr %} ▲{% elif sort|slice:"1:" == attr and sort|first == "-" %} ▼{% endif %}</a>{% else %}{{ label }}{% endif %}</th>{% endfor %}</tr></thead>
+<tbody>{% for cells in rows %}<tr>{% include "django_observatory/_cells.html" %}</tr>{% empty %}<tr><td class="empty" colspan="{{ columns|length }}">Nothing matches in this time range.</td></tr>{% endfor %}</tbody>
+</table></div>
+<div class="pager"><span>Page {{ page }}</span><span>{% if page > 1 %}<a class="btn" href="?{{ qs }}&amp;page={{ page|add:'-1' }}">← Newer</a>{% endif %} {% if has_next %}<a class="btn" href="?{{ qs }}&amp;page={{ page|add:'1' }}">Older →</a>{% endif %}</span></div>
+</div></div>{% endblock %}
