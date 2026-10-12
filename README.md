@@ -5,6 +5,7 @@
 [![Django](https://img.shields.io/badge/django-4.2%20%7C%205.2%20%7C%206.x-0C4B33.svg)](https://www.djangoproject.com/)
 [![CI](https://github.com/AzeemQidwai/django-observatory/actions/workflows/ci.yml/badge.svg)](https://github.com/AzeemQidwai/django-observatory/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/django-observatory?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/django-observatory)
 
 **Production observability for Django without a separate observability infrastructure.**
 
