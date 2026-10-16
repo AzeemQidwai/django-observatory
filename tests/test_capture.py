@@ -582,3 +582,42 @@ class MaintenanceRollupTests(TestCase):
         removed = maintenance.rollup(now=now)
         self.assertEqual(removed, 0)  # 1 row merged into 1 rollup row -> removed = 1 - 1 = 0
         self.assertTrue(MetricSample.objects.filter(metric=metric, resolution=3600).exists())
+
+
+ERROR_TEMPLATES = [{
+    "BACKEND": "django.template.backends.django.DjangoTemplates",
+    "DIRS": [__import__("pathlib").Path(__file__).parent / "error_templates"],
+    "APP_DIRS": True,
+    "OPTIONS": {"context_processors": ["django.template.context_processors.request",
+                                       "django.contrib.auth.context_processors.auth",
+                                       "django.contrib.messages.context_processors.messages"]},
+}]
+
+
+class TemplateInstrumentationTests(TestCase):
+    """The template wrapper must accept every way Django and projects call render().
+    Regression: render(context=...) by keyword (Django's 403 handler) turned a 403 into a 500."""
+
+    def test_render_accepts_keyword_positional_and_no_arguments(self):
+        from django.template import engines
+
+        tpl = engines["django"].from_string("{{ exception }}")
+        with span("inside a trace"):  # the wrapper only times renders that happen inside a trace
+            self.assertEqual(tpl.render(request=None, context={"exception": "kw"}), "kw")
+            self.assertEqual(tpl.render(context={"exception": "ctx only"}), "ctx only")
+            self.assertEqual(tpl.render({"exception": "positional"}), "positional")
+            self.assertEqual(tpl.render(), "")
+        self.assertEqual(SpanRecord.objects.filter(kind="template").count(), 4)
+
+    @override_settings(TEMPLATES=ERROR_TEMPLATES)
+    def test_project_error_templates_render_through_the_middleware(self):
+        self.client.raise_request_exception = False
+        forbidden = self.client.get("/denied/")  # Django's permission_denied: render(request=..., context=...)
+        self.assertEqual(forbidden.status_code, 403)
+        self.assertContains(forbidden, "Forbidden:", status_code=403)
+        missing = self.client.get("/does-not-exist/")  # page_not_found
+        self.assertContains(missing, "Not found: /does-not-exist/", status_code=404)
+        crashed = self.client.get("/boom/1/")  # server_error: render() with no arguments
+        self.assertContains(crashed, "Server error page", status_code=500)
+        self.assertEqual(sorted(RequestRecord.objects.values_list("status_code", flat=True)), [403, 404, 500])
+        self.assertTrue(SpanRecord.objects.filter(kind="template", name__contains="403.html").exists())

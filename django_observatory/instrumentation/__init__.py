@@ -9,13 +9,14 @@ def _instrument_templates():
         return
     original = Template.render
 
-    def render(self, context_=None, request=None):
+    # Pass-through signature: Django calls render(context=..., request=...) by keyword (e.g. defaults.permission_denied).
+    def render(self, *args, **kwargs):
         if context.current() is None or not conf.get("TRACING", "TEMPLATES"):
-            return original(self, context_, request)
+            return original(self, *args, **kwargs)
         from ..tracing import span
 
         with span(f"render {getattr(self.origin, 'template_name', None) or 'template'}", "template"):
-            return original(self, context_, request)
+            return original(self, *args, **kwargs)
 
     render._obs = True
     Template.render = render
