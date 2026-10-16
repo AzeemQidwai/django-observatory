@@ -33,6 +33,7 @@ Redaction        HEALTHY    engine active
 Instrumentation  HEALTHY    active: middleware, database, http
 Overhead         HEALTHY    avg 0.21 ms, p95 0.90 ms per request (last hour)
 Server Resources HEALTHY    memory 51%, disk C:\ 62% (148.0 GB free) [psutil]
+Clock            HEALTHY    no future-dated records; clock agrees with the database server
 
 Overall: HEALTHY
 ```

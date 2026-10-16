@@ -180,8 +180,9 @@ See [incident correlation](incident-correlation.md).
 ### Health
 
 Whether observability itself is working: database, migrations, storage, event queue, worker, event
-ingestion, configuration, redaction, instrumentation, overhead (measured per-request cost) and server
-resources. The pipeline counters (enqueued, written, dropped, failed, retries) are those of the process that
+ingestion, configuration, redaction, instrumentation, overhead (measured per-request cost), server
+resources and clock (records dated in the future, or this server's clock disagreeing with the database
+server's). The pipeline counters (enqueued, written, dropped, failed, retries) are those of the process that
 served the page.
 
 ## Administration

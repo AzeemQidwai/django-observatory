@@ -486,3 +486,42 @@ class ServerResourceTests(TestCase):
         staff = User.objects.create_user("plain", password="pw")
         self.client.force_login(staff)
         self.assertEqual(self.client.get("/observability/server/").status_code, 403)
+
+
+class ClockTests(TestCase):
+    """A wrong server clock stores records at the wrong time; health must say so."""
+
+    def check(self):
+        from django_observatory import health
+
+        return next(c for c in health.report()["checks"] if c["name"] == "Clock")
+
+    def test_healthy_when_nothing_is_dated_in_the_future(self):
+        RequestRecord.objects.create(method="GET", path="/", timestamp=timezone.now())
+        c = self.check()
+        self.assertEqual(c["status"], "HEALTHY")
+
+    def test_future_dated_records_are_reported(self):
+        future = timezone.now() + datetime.timedelta(days=12, hours=11)
+        for i in range(3):
+            RequestRecord.objects.create(method="GET", path="/", timestamp=future + datetime.timedelta(seconds=30 * i))
+        ObservabilityEvent.objects.create(message="x", timestamp=future)
+        RequestRecord.objects.create(method="GET", path="/", timestamp=timezone.now() + datetime.timedelta(seconds=30))
+        c = self.check()
+        self.assertEqual(c["status"], "DEGRADED")
+        self.assertIn("3 requests, 1 log events dated in the future", c["detail"])  # 30 s ahead is tolerated
+        self.assertIn("clock was ahead", c["detail"])
+
+    def test_skew_against_the_database_server_is_reported(self):
+        from django_observatory import health
+
+        ahead = timezone.now() - datetime.timedelta(minutes=10)  # database says it is 10 minutes earlier
+        cursor = mock.MagicMock()
+        cursor.__enter__.return_value.fetchone.return_value = (ahead.replace(tzinfo=None),)
+        conn = mock.MagicMock(vendor="microsoft")
+        conn.cursor.return_value = cursor
+        with mock.patch.object(health, "connections", {"default": conn}):
+            status, detail = health._clock()
+        self.assertEqual(status, "DEGRADED")
+        self.assertRegex(detail, r"clock is 6\d\ds ahead of the database server's")
+        cursor.__enter__.return_value.execute.assert_called_once_with("SELECT SYSUTCDATETIME()")

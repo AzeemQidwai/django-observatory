@@ -5,6 +5,10 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+- Health check *Clock*: reports records dated in the future and, on PostgreSQL, SQL Server, MySQL and Oracle,
+  an application server clock that disagrees with the database server's by more than two minutes
+
 ## 0.1.0 - 2026-10-05
 
 First public release.

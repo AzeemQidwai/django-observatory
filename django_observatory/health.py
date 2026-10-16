@@ -148,11 +148,56 @@ def _server():
     return status, ", ".join(parts) + f" [{s['source']}]"
 
 
+# UTC "now" according to the database server (None where it is the same machine or unknown).
+_DB_UTC_NOW = {
+    "postgresql": "SELECT CURRENT_TIMESTAMP",
+    "microsoft": "SELECT SYSUTCDATETIME()",
+    "mysql": "SELECT UTC_TIMESTAMP()",
+    "oracle": "SELECT SYS_EXTRACT_UTC(SYSTIMESTAMP) FROM DUAL",
+}
+CLOCK_TOLERANCE = datetime.timedelta(minutes=2)
+
+
+def _clock():
+    """Every timestamp comes from the application server's clock. A wrong clock stores
+    records at the wrong time, so look for both the cause and the symptom."""
+    from .models import ObservabilityEvent, RequestRecord
+
+    now = timezone.now()
+    problems = []
+    conn = connections[_alias()]
+    sql = _DB_UTC_NOW.get(conn.vendor)
+    if sql:
+        with conn.cursor() as cur:
+            cur.execute(sql)
+            db_now = cur.fetchone()[0]
+        if db_now.tzinfo is None:
+            db_now = db_now.replace(tzinfo=datetime.timezone.utc)
+        skew = (now - db_now).total_seconds()
+        if abs(skew) > CLOCK_TOLERANCE.total_seconds():
+            problems.append(f"this server's clock is {abs(skew):.0f}s {'ahead of' if skew > 0 else 'behind'} "
+                            f"the database server's")
+    limit = now + CLOCK_TOLERANCE
+    future = {name: model.objects.filter(timestamp__gt=limit)
+              for name, model in (("requests", RequestRecord), ("log events", ObservabilityEvent))}
+    counts = {name: qs.count() for name, qs in future.items()}
+    if any(counts.values()):
+        latest = max(qs.order_by("-timestamp").values_list("timestamp", flat=True).first()
+                     for name, qs in future.items() if counts[name])
+        detail = ", ".join(f"{n} {name}" for name, n in counts.items() if n)
+        problems.append(f"{detail} dated in the future (latest {timezone.localtime(latest):%Y-%m-%d %H:%M}): "
+                        "a server clock was ahead when they were written")
+    if problems:
+        return DEGRADED, "; ".join(problems)
+    return HEALTHY, "no future-dated records" + ("; clock agrees with the database server" if sql else "")
+
+
 CHECKS = (
     ("Database", _database), ("Migrations", _migrations), ("Storage", _storage), ("Event Queue", _queue),
     ("Worker", _worker), ("Event Ingestion", _ingestion), ("Configuration", _configuration),
     ("Redaction", _redaction), ("Instrumentation", _instrumentation), ("Overhead", _overhead),
     ("Server Resources", _server),
+    ("Clock", _clock),
 )
 
 

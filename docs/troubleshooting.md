@@ -16,6 +16,7 @@ Start with `python manage.py observability_test` and the **Health** page (or `ob
 | `database is locked` (SQLite) | Keep `STORAGE.SQLITE_WAL` on, move telemetry to its own SQLite file, set `OPTIONS: {"timeout": 20}`. |
 | Alerts or incidents never fire | `SCHEDULER.ENABLED` is False, there is too little traffic (`INCIDENTS.MIN_REQUESTS`), or the process is idle: the scheduler runs in the worker thread of a live process. |
 | No email notifications | Set `ALERTS.EMAIL_TO` and a working Django `EMAIL_BACKEND`. |
+| Newest records show a date in the future; they sit at the top of lists and are missing from charts | The application server's clock was ahead when they were written (Health → *Clock* reports it). Fix the clock (`w32tm /resync` on Windows, NTP on Linux). The records keep their wrong time; delete them if they are in the way — see below. |
 | Client IP is the proxy | Set `REQUESTS.TRUST_PROXY_HEADERS = True` behind a trusted reverse proxy. |
 | Messages `[django-observatory] WARNING …` on stderr | An internal failure was isolated. The application is unaffected; the message names the component. |
 
@@ -27,3 +28,23 @@ Use the synchronous pipeline for deterministic assertions:
 OBSERVABILITY = {"PIPELINE": {"SYNC": True}, "SCHEDULER": {"ENABLED": False}}
 ```
 or disable it entirely with `{"ENABLED": False}`.
+
+## Removing records written with a wrong clock
+
+Timestamps come from the clock of the machine that handled the request. If it was ahead, records are dated
+in the future. After fixing the clock, review and remove them:
+
+```bash
+python manage.py shell -c "
+from django.utils import timezone
+from django_observatory.models import (ObservabilityEvent, RequestRecord, TraceRecord, SpanRecord, DatabaseQuery,
+    ExternalCall, ExceptionRecord, SecurityEvent, MetricSample)
+now = timezone.now()
+for m in (ObservabilityEvent, RequestRecord, TraceRecord, SpanRecord, DatabaseQuery, ExternalCall,
+          ExceptionRecord, SecurityEvent, MetricSample):
+    qs = m.objects.filter(timestamp__gt=now)
+    print(m.__name__, qs.count())       # review first; then add .delete() to remove
+"
+```
+
+Audit events are deliberately not in this list: they cannot be deleted through the application.
