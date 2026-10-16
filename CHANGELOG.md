@@ -5,6 +5,8 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.1.3 - 2026-10-16
+
 ### Fixed
 - Projects with their own `403.html` returned a 500 instead of the 403 page: the template-timing wrapper
   rejected `render(context=...)` passed by keyword, which Django's `permission_denied` handler does
