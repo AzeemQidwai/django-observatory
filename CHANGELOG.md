@@ -5,9 +5,17 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.1.1 - 2026-10-16
+
 ### Added
 - Health check *Clock*: reports records dated in the future and, on PostgreSQL, SQL Server, MySQL and Oracle,
   an application server clock that disagrees with the database server's by more than two minutes
+
+### Fixed
+- A Windows CPU-reading test could fail on fast machines (CPU counters advance in ~15 ms ticks)
+
+### Maintenance
+- CI uses `actions/checkout` v7 and `actions/setup-python` v7
 
 ## 0.1.0 - 2026-10-05
 
