@@ -369,7 +369,12 @@ class ServerResourceTests(TestCase):
 
         with mock.patch.object(system, "psutil", None), mock.patch.object(system, "_prev_cpu", None):
             self.assertIsNone(system.cpu_percent())  # first reading has nothing to compare with
-            sum(i * i for i in range(200000))
+            # Windows advances its CPU-time counters in ~15.6 ms ticks: keep busy for longer than a few ticks
+            import time
+
+            deadline = time.perf_counter() + 0.15
+            while time.perf_counter() < deadline:
+                sum(i * i for i in range(10000))
             s = system.sample()
         self.assertEqual(s["source"], "stdlib")
         self.assertTrue(0 <= s["cpu"] <= 100)
