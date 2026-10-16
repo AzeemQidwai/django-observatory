@@ -116,6 +116,17 @@ class RequestTests(TestCase):
         self.client.get("/admin/")
         self.assertEqual(RequestRecord.objects.get().username, "ahmed")
 
+    def test_monitor_user_agents_are_ignored(self):
+        with cfg(REQUESTS={"IGNORE_USER_AGENTS": ["watchdog/"]}):
+            self.client.get("/ok/", HTTP_USER_AGENT="Watchdog/1.0 (liveness probe)")   # case-insensitive
+            self.client.get("/ok/", HTTP_USER_AGENT="Mozilla/5.0 (Windows NT 10.0)")
+            self.client.get("/ok/")                                                     # no User-Agent at all
+            metrics.flush()
+        self.assertEqual(sorted(RequestRecord.objects.values_list("user_agent", flat=True)),
+                         ["", "Mozilla/5.0 (Windows NT 10.0)"])
+        end = timezone.now() + datetime.timedelta(minutes=1)
+        self.assertEqual(metrics.total("http.requests", end - datetime.timedelta(hours=1), end).sum, 2)  # not counted
+
     def test_ignored_paths_and_disabled(self):
         self.client.get("/static/x.css")
         with cfg(ENABLED=False):

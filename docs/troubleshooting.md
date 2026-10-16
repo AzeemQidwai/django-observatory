@@ -17,6 +17,7 @@ Start with `python manage.py observability_test` and the **Health** page (or `ob
 | Alerts or incidents never fire | `SCHEDULER.ENABLED` is False, there is too little traffic (`INCIDENTS.MIN_REQUESTS`), or the process is idle: the scheduler runs in the worker thread of a live process. |
 | No email notifications | Set `ALERTS.EMAIL_TO` and a working Django `EMAIL_BACKEND`. |
 | Newest records show a date in the future; they sit at the top of lists and are missing from charts | The application server's clock was ahead when they were written (Health → *Clock* reports it). Fix the clock (`w32tm /resync` on Windows, NTP on Linux). The records keep their wrong time; delete them if they are in the way — see below. |
+| An uptime monitor's checks fill the Requests page | Give the monitor a distinctive `User-Agent` and list it in `REQUESTS.IGNORE_USER_AGENTS`, or point it at a path in `REQUESTS.IGNORE_PATHS`. Ignored requests are left out of metrics too. |
 | Client IP is the proxy | Set `REQUESTS.TRUST_PROXY_HEADERS = True` behind a trusted reverse proxy. |
 | Messages `[django-observatory] WARNING …` on stderr | An internal failure was isolated. The application is unaffected; the message names the component. |
 

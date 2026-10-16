@@ -38,6 +38,8 @@ DEFAULTS = {
         "CAPTURE_BODY": False,
         "MAX_BODY_BYTES": 4096,
         "IGNORE_PATHS": ["/static/", "/media/", "/favicon.ico"],
+        # User-Agent substrings (case-insensitive) of synthetic traffic: uptime monitors, load-balancer checks
+        "IGNORE_USER_AGENTS": [],
         "RESPONSE_HEADERS": True,  # X-Request-ID / X-Trace-ID
         "TRUST_REQUEST_ID_HEADER": False,
         "TRUST_PROXY_HEADERS": False,  # use X-Forwarded-For for client IP

@@ -78,6 +78,7 @@ LOGGING = {
 |---|---|---|
 | `ENABLED` | `True` | Capture requests and build traces. |
 | `IGNORE_PATHS` | `["/static/", "/media/", "/favicon.ico"]` | Path prefixes not observed at all. Add polling and health-check URLs. |
+| `IGNORE_USER_AGENTS` | `[]` | Requests whose `User-Agent` contains any of these strings (case-insensitive) are not observed at all — for uptime monitors and load-balancer health checks that poll real pages, e.g. `["Watchdog/", "ELB-HealthChecker"]`. Pick a string your monitor sends and real clients never do. |
 | `SLOW_MS` | `1000` | A request this slow is always kept regardless of sampling and gets "Why is this slow?". |
 | `RESPONSE_HEADERS` | `True` | Add `X-Request-ID` and `X-Trace-ID` to responses. |
 | `CAPTURE_HEADERS` | `True` | Store request headers (sensitive ones are always redacted). |

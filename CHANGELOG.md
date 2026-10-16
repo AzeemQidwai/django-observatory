@@ -5,6 +5,9 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Added
+- `REQUESTS.IGNORE_USER_AGENTS`: leave uptime monitors and load-balancer health checks out of the data
+
 ## 0.1.1 - 2026-10-16
 
 ### Added

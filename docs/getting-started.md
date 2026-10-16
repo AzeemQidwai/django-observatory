@@ -150,7 +150,7 @@ See the [Python API](instrumentation.md).
 - [ ] `SERVICE_NAME`, `ENVIRONMENT`, `RELEASE` set
 - [ ] Decide where telemetry lives: the application database, or [a separate one](deployment.md#keeping-telemetry-out-of-the-application-database-recommended-for-busy-sites)
 - [ ] Busy site? Set `SAMPLING.requests` to `0.1`–`0.25` (errors, slow requests and dashboards are unaffected)
-- [ ] Polling or health-check URLs added to `REQUESTS.IGNORE_PATHS`
+- [ ] Polling or health-check URLs added to `REQUESTS.IGNORE_PATHS`, uptime monitors to `REQUESTS.IGNORE_USER_AGENTS`
 - [ ] `EXTERNAL_HTTP.SERVICES` maps hostnames to friendly names
 - [ ] `ALERTS.EMAIL_TO` or `ALERTS.WEBHOOK_URL` set, and a working Django email backend
 - [ ] Review who is staff; grant `view_audit_events` and `manage_observability_settings` deliberately

@@ -114,6 +114,11 @@ class ObservabilityMiddleware:
                 return ("suppress", context._suppress.set(True))
             if path.startswith(tuple(conf.get("REQUESTS", "IGNORE_PATHS"))):
                 return None
+            agents = conf.get("REQUESTS", "IGNORE_USER_AGENTS")
+            if agents:
+                agent = request.META.get("HTTP_USER_AGENT", "").lower()
+                if agent and any(a.lower() in agent for a in agents):
+                    return None  # health checks: not part of the application's traffic
             meta = request.META
             trace_id, parent = context.parse_traceparent(meta.get("HTTP_TRACEPARENT"))
             if trace_id is None:
