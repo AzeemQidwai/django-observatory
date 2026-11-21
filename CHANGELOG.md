@@ -5,6 +5,18 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+## 0.1.4 - 2026-11-21
+
+### Added
+- `PIPELINE.SHUTDOWN_TIMEOUT` (default 5 s): how long a stopping process waits for queued events to be
+  written. Previously fixed at 5 s, so a large backlog was cut off even when the server allowed longer
+- Deployment docs: what can be lost on graceful and forced worker shutdown
+
+### Fixed
+- Forked worker processes (gunicorn `--preload`, multiprocessing) now start with a fresh queue, lock and
+  counters. Before, a child inherited the parent's counters until its first event and could deadlock on a
+  queue lock held by the parent's writer at fork time
+
 ## 0.1.3 - 2026-10-16
 
 ### Fixed

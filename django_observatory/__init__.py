@@ -7,7 +7,7 @@ before the app registry is ready):
 """
 import importlib
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 
 _LAZY = {
     "observe": ("django_observatory.observe", None),
