@@ -22,6 +22,17 @@ class Pipeline:
     def __init__(self):
         self._lock = threading.Lock()
         self._reset()
+        if hasattr(os, "register_at_fork"):  # POSIX: drop the parent's queue/locks the moment we fork
+            os.register_at_fork(after_in_child=self._after_fork)
+
+    def _after_fork(self):
+        # A lock or the queue's mutex may have been held by the parent's writer at fork time; a child
+        # touching the inherited copies (e.g. health() before the first enqueue) could deadlock.
+        try:
+            self._lock = threading.Lock()
+            self._reset()
+        except Exception:  # noqa: BLE001
+            pass
 
     def _reset(self):
         self._q = queue.Queue(maxsize=conf.get("PIPELINE", "QUEUE_SIZE"))
@@ -152,8 +163,11 @@ class Pipeline:
             time.sleep(0.01)
         return not self._q.unfinished_tasks
 
-    def shutdown(self, timeout=5.0):
+    def shutdown(self, timeout=None):
+        """Drain the queue on process exit. Events still queued after ``timeout`` are lost."""
         try:
+            if timeout is None:
+                timeout = conf.get("PIPELINE", "SHUTDOWN_TIMEOUT")
             if self._pid == os.getpid() and self._thread is not None and self._thread.is_alive():
                 self._stop.set()
                 self._thread.join(timeout)

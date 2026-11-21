@@ -42,6 +42,7 @@ effective values.
 | `BATCH_SIZE` | `500` | Maximum events written in one transaction. |
 | `FLUSH_INTERVAL` | `1.0` | Seconds the worker waits for events before writing what it has. |
 | `MAX_RETRIES` | `3` | Retries of a failed batch (with backoff) before falling back to per-kind writes. |
+| `SHUTDOWN_TIMEOUT` | `5.0` | Seconds a stopping process waits for queued events to be written; what is still queued after that is lost. Keep it below your server's graceful timeout (gunicorn `--graceful-timeout`, default 30). |
 | `SYNC` | `False` | Write in the calling thread. For tests only. |
 
 ## `LOGGING`

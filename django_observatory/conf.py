@@ -24,6 +24,9 @@ DEFAULTS = {
         "BATCH_SIZE": 500,
         "FLUSH_INTERVAL": 1.0,
         "MAX_RETRIES": 3,
+        # Seconds a stopping process waits for queued events to be written. Keep it below the
+        # server's graceful timeout (gunicorn --graceful-timeout, default 30).
+        "SHUTDOWN_TIMEOUT": 5.0,
     },
     "LOGGING": {
         "AUTO_ATTACH": True,

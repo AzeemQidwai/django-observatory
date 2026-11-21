@@ -46,6 +46,20 @@ sync- and async-capable and state is carried in `contextvars`, never thread-loca
 uWSGI: start with `--enable-threads` (the worker is a thread). Pre-fork servers are handled: the worker
 thread is started lazily per process, after the fork.
 
+### What can be lost on restart
+
+Events are queued in memory and written by a background thread, so a process that stops can take queued
+events with it. Tested against gunicorn with and without `--preload`:
+
+| How the worker stops | Queued events |
+|---|---|
+| Graceful: `SIGTERM`, `SIGINT`, `SIGHUP` reload, `--max-requests` restart | Written, for up to `PIPELINE.SHUTDOWN_TIMEOUT` seconds (default 5). Anything still queued after that is lost. |
+| Forced: `SIGKILL`, OOM killer, container killed after its grace period, gunicorn `--timeout` kill | Lost: up to `PIPELINE.QUEUE_SIZE` events per process. |
+
+If your database is slow or traffic is bursty, raise `SHUTDOWN_TIMEOUT`, keeping it below
+`--graceful-timeout` (and your orchestrator's grace period). The *Event Queue* health check shows how far
+behind the writer is.
+
 ## Sizing and retention
 
 Rough volume per request at 100% sampling: 1 request row, 1 trace row, 2 + N span rows, N query rows.

@@ -3,6 +3,8 @@ sampling, the real worker pipeline and - above all - failure isolation."""
 import datetime
 import io
 import logging
+import os
+import unittest
 import urllib.error
 import urllib.request
 from unittest import mock
@@ -425,6 +427,53 @@ class PipelineTests(TransactionTestCase):
                 p.enqueue("event", {"message": "high"}, high=True)
                 self.assertGreater(dropped_low, 0)  # never blocks, never raises
                 self.assertEqual(p.stats["enqueued"], before + 1)  # headroom reserved for high priority
+
+    def test_shutdown_drains_queue_and_respects_timeout(self):
+        import time
+
+        from django_observatory.storage.django import DjangoORMBackend
+
+        real = DjangoORMBackend.write_batch
+
+        def slow(self, grouped):
+            time.sleep(0.3)
+            return real(self, grouped)
+
+        cfg = {**self.ASYNC, "PIPELINE": {**self.ASYNC["PIPELINE"], "BATCH_SIZE": 1, "SHUTDOWN_TIMEOUT": 0.5}}
+        with override_settings(OBSERVABILITY=cfg), mock.patch.object(DjangoORMBackend, "write_batch", slow):
+            for i in range(10):
+                observe.info(f"event {i}")
+            t = time.monotonic()
+            pipeline.pipeline.shutdown()  # what atexit runs: gives up after SHUTDOWN_TIMEOUT
+            self.assertLess(time.monotonic() - t, 2)
+            self.assertLess(ObservabilityEvent.objects.count(), 10)
+            pipeline.pipeline._thread.join(10)  # let the stopped worker finish before the next phase
+        with override_settings(OBSERVABILITY=self.ASYNC):
+            for i in range(10):
+                observe.info(f"drained {i}")
+            pipeline.pipeline.shutdown()  # enough time: everything queued is written
+            self.assertFalse(pipeline.pipeline.health()["worker_alive"])
+            self.assertEqual(ObservabilityEvent.objects.filter(message__startswith="drained").count(), 10)
+
+    @unittest.skipUnless(hasattr(os, "fork"), "POSIX only")
+    def test_forked_child_starts_with_a_fresh_queue(self):
+        with override_settings(OBSERVABILITY=self.ASYNC):
+            p = pipeline.pipeline
+            p._start()
+            with mock.patch.object(p, "_write", side_effect=lambda *a, **k: __import__("time").sleep(0.5)):
+                for i in range(5):
+                    p.enqueue("event", {"message": "parent"})
+                r, w = os.pipe()
+                pid = os.fork()
+                if pid == 0:  # child: must not see (or write) the parent's queue, stats or thread
+                    h = p.health()
+                    os.write(w, f"{h['queue_depth']},{h['enqueued']},{int(h['worker_alive'])}".encode())
+                    os._exit(0)
+                os.close(w)
+                out = os.read(r, 100).decode()
+                os.waitpid(pid, 0)
+                os.close(r)
+            self.assertEqual(out, "0,0,0")
 
 
 class OpenTelemetryTests(TestCase):
