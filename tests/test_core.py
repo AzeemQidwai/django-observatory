@@ -58,6 +58,23 @@ class RedactionTests(SimpleTestCase):
         ]:
             self.assertNotIn(secret, redaction.text(sample), sample)
 
+    def test_no_catastrophic_backtracking(self):
+        import time
+        for s in ("a." * 8000 + "csrf" * 8000, "a-" * 8000 + "password" * 8000, "a." * 8000 + "://"):
+            t = time.perf_counter()
+            redaction.text(s)
+            self.assertLess(time.perf_counter() - t, 1.0, s[:20])  # was ~47s for 4.8KB
+
+    def test_url_path_masks_credential_segments(self):
+        self.assertEqual(redaction.url_path("/services/T0AB12CD/B0AB12CD/9f8XyQ2wLmN3pK7rT5vB1cZa"),
+                         "/services/T0AB12CD/B0AB12CD/[REDACTED]")
+        self.assertEqual(redaction.url_path("/bot123456:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage"),
+                         "/[REDACTED]/sendMessage")
+        self.assertEqual(redaction.url_path("/reset/MQ/c4z1ab-x9/", secrets=("c4z1ab-x9",)), "/reset/MQ/[REDACTED]/")
+        for keep in ("/blog/my-long-blog-post-title-2024/", "/orders/3f2c1a9e-8b7d-4c6e-9f10-2a3b4c5d6e7f/",
+                     "/api/v1/users/12345678901234567890/"):
+            self.assertEqual(redaction.url_path(keep), keep)
+
     @override_settings(OBSERVABILITY_REDACTION={"keys": ["national_id"], "patterns": [r"\b\d{5}-\d{7}-\d\b"]})
     def test_custom_rules(self):
         self.assertEqual(redaction.clean({"national_id": "x"}), {"national_id": "[REDACTED]"})

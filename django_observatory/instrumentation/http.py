@@ -42,6 +42,7 @@ def record(method, url, t_wall, duration, status=None, exc=None, size=None):
     try:
         parts = urlsplit(str(url))
         host = parts.netloc.rsplit("@", 1)[-1]
+        path = redaction.url_path(parts.path)  # webhook/bot APIs carry the credential in the path
         service = service_for(host)
         if status is None and exc is not None:
             status = getattr(exc, "code", None) if isinstance(getattr(exc, "code", None), int) else None
@@ -52,7 +53,7 @@ def record(method, url, t_wall, duration, status=None, exc=None, size=None):
         metrics.increment("ext.calls", labels={"service": service, "outcome": "error" if error else "ok"})
         metrics.histogram("ext.duration", duration, {"service": service}, "ms")
         row = {
-            "service": service, "host": host, "method": method.upper(), "path": redaction.text(parts.path, 500),
+            "service": service, "host": host, "method": method.upper(), "path": path,
             "status_code": status, "duration_ms": duration, "error": error, "timeout": timeout,
             "exc_type": type(exc).__name__ if exc is not None else "", "response_size": size,
         }
@@ -64,7 +65,7 @@ def record(method, url, t_wall, duration, status=None, exc=None, size=None):
         offset = (t_wall - ctx.start_wall) * 1000
         ctx.ext_count += 1
         ctx.ext_ms += duration
-        ctx.crumb("http", f"{method.upper()} {service}{parts.path} -> {'timeout' if timeout else status or row['exc_type']}"
+        ctx.crumb("http", f"{method.upper()} {service}{path} -> {'timeout' if timeout else status or row['exc_type']}"
                   f" ({duration:.0f}ms)", "error" if error else "info")
         ctx.externals.append({**row, "span_id": span_id, "offset_ms": offset})
         ctx.add_span({

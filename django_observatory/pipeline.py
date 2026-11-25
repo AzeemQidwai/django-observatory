@@ -96,7 +96,8 @@ class Pipeline:
                 for _ in batch:
                     self._q.task_done()
             try:
-                scheduler.maybe_tick()
+                if get_backend().ready():
+                    scheduler.maybe_tick()
             except Exception as exc:  # noqa: BLE001
                 internal.warn("scheduler", "tick failed", exc)
             if self._stop.is_set() and self._q.empty():
@@ -120,6 +121,9 @@ class Pipeline:
             return
         backend = get_backend()
         total = sum(len(rows) for rows in grouped.values())
+        if not backend.ready():  # tables not migrated yet (e.g. during ``migrate``): drop quietly
+            self.stats["dropped"] += total
+            return
         with context.suppressed():
             for attempt in range(retries + 1):
                 try:

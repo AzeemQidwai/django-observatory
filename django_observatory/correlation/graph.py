@@ -30,7 +30,7 @@ def _url(name, *args):
     return reverse(f"django_observatory:{name}", args=args)
 
 
-def add_request(g, req, parent=None, max_spans=14):
+def add_request(g, req, parent=None, max_spans=14, perms=None):
     """Request -> Trace -> View / SQL / External API, and Request -> User / Exception -> Issue."""
     rid = g.node(f"req:{req.request_id}", f"{req.method} {req.route or req.path}", "request",
                  _url("request_detail", req.request_id), f"{req.status_code} · {req.duration_ms:.0f} ms")
@@ -46,6 +46,8 @@ def add_request(g, req, parent=None, max_spans=14):
         kind = {"db": "query", "http": "external"}.get(s.kind, s.kind)
         key = f"ext:{s.attributes.get('service')}" if s.kind == "http" else f"span:{s.span_id}"
         g.edge(tid, g.node(key, s.name, kind, "", f"{s.duration_ms:.0f} ms" + (" · error" if s.status == "error" else "")))
+    if perms is not None and not perms["view_exceptions"]:
+        return rid
     for exc in ExceptionRecord.objects.filter(request_id=req.request_id).select_related("issue")[:3]:
         eid = g.node(f"exc:{exc.uid}", exc.exc_type, "exception", _url("exception_detail", exc.pk), exc.message)
         g.edge(rid, eid)
@@ -54,14 +56,18 @@ def add_request(g, req, parent=None, max_spans=14):
     return rid
 
 
-def request_graph(req):
+def request_graph(req, perms=None):
     g = Graph()
-    add_request(g, req)
+    add_request(g, req, perms=perms)
     return g.data()
 
 
-def incident_graph(incident):
-    """Incident -> signals (metrics / external services / issues) -> example failing requests."""
+def incident_graph(incident, perms=None):
+    """Incident -> signals (metrics / external services / issues) -> example failing requests.
+    ``perms`` (permissions.granted) leaves out what the viewer's sections do not allow."""
+    def can(p):
+        return perms is None or perms[p]
+
     g = Graph()
     root = g.node(f"inc:{incident.pk}", f"Incident #{incident.pk}", "incident", "", incident.title)
     for sig in incident.signals.exclude(relationship="evidence"):
@@ -73,11 +79,12 @@ def incident_graph(incident):
             issue = Issue.objects.filter(exc_type=sig.source).order_by("-last_seen").first()
             nid = g.node(f"issue:{issue.pk}" if issue else f"exc:{sig.source}",
                          f"Issue #{issue.pk}" if issue else sig.source, "issue",
-                         _url("issue_detail", issue.pk) if issue else "", issue.title if issue else sig.description)
+                         _url("issue_detail", issue.pk) if issue else "",
+                         issue.title if issue and can("view_exceptions") else sig.description)
         else:
             nid = g.node(f"metric:{sig.kind}", sig.kind.replace("_", " ").title(), "metric", "", sig.description)
         g.edge(root, nid)
-    if incident.cause_kind == "exception" and incident.cause_subject:
+    if incident.cause_kind == "exception" and incident.cause_subject and can("view_exceptions"):
         for sig in incident.signals.filter(ref_kind="issue")[:1]:
             issue = Issue.objects.filter(pk=sig.ref_id).first() if sig.ref_id.isdigit() else None
             if issue:
@@ -85,6 +92,8 @@ def incident_graph(incident):
                                     _url("issue_detail", issue.pk), issue.title))
     if incident.cause_kind == "deployment":
         g.edge(root, g.node(f"release:{incident.cause_subject}", f"Release {incident.cause_subject}", "release"))
+    if not can("view_requests"):
+        return g.data()
     routes = [e["route"] for e in incident.affected_endpoints][:20]
     end = incident.resolved_at or incident.last_seen
     examples = RequestRecord.objects.filter(timestamp__gte=incident.started_at, timestamp__lte=end, route__in=routes)
@@ -93,5 +102,5 @@ def incident_graph(incident):
                    .order_by("-duration_ms").values_list("request_id", flat=True)[:50])
         examples = examples.filter(request_id__in=ids)
     for req in examples.order_by("-status_code", "-duration_ms")[:2]:
-        add_request(g, req, parent=root, max_spans=5)
+        add_request(g, req, parent=root, max_spans=5, perms=perms)
     return g.data()

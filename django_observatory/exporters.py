@@ -6,14 +6,15 @@ import json
 
 from django.http import StreamingHttpResponse
 
-from . import redaction
+from . import permissions, redaction
 
 FORMATS = {"json": "application/json", "csv": "text/csv", "ndjson": "application/x-ndjson"}
 MAX_ROWS = 50000
 
 
-def serialize(obj, exclude=()):
-    """Model instance -> JSON-safe, redacted dict of its concrete fields."""
+def serialize(obj, exclude=(), user=None):
+    """Model instance -> JSON-safe, redacted dict of its concrete fields. With ``user``, breadcrumbs
+    from sections that user may not view are hidden."""
     out = {}
     for f in obj._meta.concrete_fields:
         if f.attname in exclude:
@@ -21,6 +22,8 @@ def serialize(obj, exclude=()):
         v = getattr(obj, f.attname)
         if isinstance(v, (datetime.datetime, datetime.date)):
             v = v.isoformat()
+        if f.attname == "breadcrumbs" and user is not None:
+            v = permissions.visible_crumbs(user, v)
         out[f.attname] = redaction.REDACTED if redaction.is_sensitive_key(f.attname) else redaction.clean(v)
     return out
 
@@ -39,14 +42,14 @@ def _csv_safe(v):
     return v
 
 
-def _rows(queryset, limit):
+def _rows(queryset, limit, user=None):
     for obj in queryset[:limit].iterator(chunk_size=500):
-        yield serialize(obj)
+        yield serialize(obj, user=user)
 
 
-def stream(queryset, fmt, limit=MAX_ROWS):
+def stream(queryset, fmt, limit=MAX_ROWS, user=None):
     """Generator of text chunks."""
-    rows = _rows(queryset, min(limit, MAX_ROWS))
+    rows = _rows(queryset, min(limit, MAX_ROWS), user)
     if fmt == "ndjson":
         for r in rows:
             yield json.dumps(r, default=str) + "\n"
@@ -65,8 +68,8 @@ def stream(queryset, fmt, limit=MAX_ROWS):
         raise ValueError(f"Unknown export format: {fmt}")
 
 
-def response(queryset, fmt, name):
-    resp = StreamingHttpResponse(stream(queryset, fmt), content_type=FORMATS[fmt] + "; charset=utf-8")
+def response(queryset, fmt, name, user=None):
+    resp = StreamingHttpResponse(stream(queryset, fmt, user=user), content_type=FORMATS[fmt] + "; charset=utf-8")
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     resp["Content-Disposition"] = f'attachment; filename="observability-{name}-{stamp}.{fmt}"'
     resp["X-Content-Type-Options"] = "nosniff"

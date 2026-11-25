@@ -8,7 +8,11 @@ Design notes
 - Only portable column types: works on SQLite, PostgreSQL and SQL Server.
 """
 import hashlib
+import hmac
 import json
+
+from django.conf import settings
+from django.utils.crypto import salted_hmac
 
 from django.db import models
 from django.utils import timezone
@@ -385,11 +389,23 @@ class AuditEvent(Correlated):
     def __str__(self):
         return f"{self.username} {self.action} {self.object_type} #{self.object_id}"
 
-    def compute_hash(self):
+    def _body(self):
         payload = {f: getattr(self, f) for f in self.HASHED}
         payload["timestamp"] = self.timestamp.replace(microsecond=0).isoformat() if self.timestamp else ""
-        body = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
-        return hashlib.sha256((self.prev_hash + body).encode()).hexdigest()
+        return self.prev_hash + json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
+
+    def compute_hash(self, secret=None):
+        """HMAC keyed with SECRET_KEY: write access to the table alone cannot forge a valid row."""
+        return salted_hmac("django_observatory.audit", self._body(), secret=secret, algorithm="sha256").hexdigest()
+
+    def _hash_kind(self):
+        """'keyed' (current key or a SECRET_KEY_FALLBACKS entry), 'legacy' (pre-0.1.5 unkeyed SHA-256) or None."""
+        for secret in (None, *getattr(settings, "SECRET_KEY_FALLBACKS", ())):
+            if hmac.compare_digest(self.compute_hash(secret), self.hash):
+                return "keyed"
+        if hmac.compare_digest(hashlib.sha256(self._body().encode()).hexdigest(), self.hash):
+            return "legacy"
+        return None
 
     def save(self, *args, **kwargs):
         if self.pk:
@@ -404,14 +420,16 @@ class AuditEvent(Correlated):
         """Returns (checked, problems). A row is valid when its hash recomputes and its
         predecessor matches the prior row's hash (the oldest surviving row is the anchor after retention)."""
         problems, checked = [], 0
-        last_hash = None
+        last_hash, keyed_seen = None, False
         for row in cls.objects.order_by("pk")[:limit].iterator():
             checked += 1
-            if row.compute_hash() != row.hash:
+            kind = row._hash_kind()
+            # unkeyed rows are only trusted before the first keyed one (written before the upgrade)
+            if kind is None or (kind == "legacy" and keyed_seen):
                 problems.append((row.pk, "modified"))
             elif last_hash is not None and row.prev_hash != last_hash:
                 problems.append((row.pk, "predecessor missing"))
-            last_hash = row.hash
+            last_hash, keyed_seen = row.hash, keyed_seen or kind == "keyed"
         return checked, problems
 
 

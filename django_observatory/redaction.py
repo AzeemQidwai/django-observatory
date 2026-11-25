@@ -14,8 +14,8 @@ DEFAULT_KEYS = (
 )
 
 _KV_KEYS = (
-    r"(?:[\w.-]*?(?:pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?token|"
-    r"refresh[_-]?token|client[_-]?secret|sessionid|csrf\w*))"
+    r"(?:[\w.-]{0,40}?(?:pass(?:word|wd)?|secret|token|api[_-]?key|access[_-]?token|"
+    r"refresh[_-]?token|client[_-]?secret|sessionid|csrf\w{0,20}))"  # bounded: unbounded repeats here were O(n^3) (ReDoS)
 )
 DEFAULT_PATTERNS = (
     # Authorization / Cookie header lines
@@ -28,7 +28,7 @@ DEFAULT_PATTERNS = (
     # PEM private keys
     (re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S), REDACTED),
     # credentials in URLs
-    (re.compile(r"(?i)(\b[a-z][a-z0-9+.\-]*://[^\s/:@]+:)[^\s/@]+@"), r"\1" + REDACTED + "@"),
+    (re.compile(r"(?i)(\b[a-z][a-z0-9+.\-]{0,30}://[^\s/:@]+:)[^\s/@]+@"), r"\1" + REDACTED + "@"),
 )
 
 MAX_DEPTH = 6
@@ -103,6 +103,25 @@ def clean(value, _depth=0):
         return text(str(value))
     except Exception:
         return f"<unprintable {type(value).__name__}>"
+
+
+_SECRET_RUN = re.compile(r"[A-Za-z0-9]{16,}")
+
+
+def _looks_secret(segment):
+    # a long unbroken letter+digit run: webhook/bot tokens, reset tokens, API keys. Slugs and UUIDs
+    # break into shorter runs. ponytail: heuristic, add per-host rules if a real token slips through.
+    return any(not m.isalpha() and not m.isdigit() for m in _SECRET_RUN.findall(segment))
+
+
+def url_path(path, secrets=(), limit=500):
+    """A URL path (or URL) safe to store: segments equal to ``secrets`` or that look like
+    credentials are replaced, then the usual text redaction runs."""
+    if not path:
+        return ""
+    s = str(path)[: limit * 4]
+    s = "/".join(REDACTED if seg and (seg in secrets or _looks_secret(seg)) else seg for seg in s.split("/"))
+    return text(s, limit)
 
 
 def headers(meta):

@@ -46,4 +46,5 @@ urlpatterns = [
     path("observability/", include("django_observatory.urls")),
     path("ok/", ok), path("sql/", sql), path("boom/<int:pk>/", boom), path("denied/", denied),
     path("external/", external), path("async/", aview),
+    path("reset/<uidb64>/<token>/", lambda request, uidb64, token: HttpResponse("reset")),
 ]

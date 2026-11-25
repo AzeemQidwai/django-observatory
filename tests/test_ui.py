@@ -243,3 +243,37 @@ class WebSecurityTests(UiBase):
         self.assertEqual(resp.status_code, 403)
         self.assertNotIn(b"Traceback", resp.content)
         self.assertEqual(TraceRecord.objects.filter(name__contains="observability").count(), 0)
+
+
+class SectionLeakTests(UiBase):
+    """Data from a stricter section must not surface on pages gated by a looser permission."""
+
+    @override_settings(OBSERVABILITY={**BASE, "PERMISSION_MODE": "permissions"})
+    def test_base_permission_does_not_reveal_other_sections(self):
+        grant(self.staff, "view_observability", "view_exceptions")
+        self.client.force_login(User.objects.get(pk=self.staff.pk))
+        exc = ExceptionRecord.objects.get()
+        crumbs = self.client.get(f"/observability/api/exceptions/{exc.pk}/").json()["breadcrumbs"]
+        self.assertTrue(crumbs)
+        self.assertNotIn("/boom/7/", json.dumps(crumbs))  # request crumb needs view_requests
+        self.assertNotContains(self.client.get(f"/observability/exceptions/{exc.pk}/"), "GET /boom/7/")
+        user = User.objects.create_user("obs", password="pw", is_staff=True)
+        grant(user, "view_observability")
+        self.client.force_login(user)
+        self.assertNotContains(self.client.get("/observability/"), "exploded for order")
+
+    @override_settings(OBSERVABILITY={**BASE, "ALERTS": {"WEBHOOK_URL": "https://hooks.slack.com/services/T0/B0/hookSecret9"},
+                                      "OTEL": {"endpoint": "https://api.honeycomb.io/v1", "headers": {"x-honeycomb-team": "hcKey7"}}})
+    def test_settings_page_masks_url_and_header_secrets(self):
+        self.client.force_login(self.admin)
+        html = self.client.get("/observability/settings/").content.decode()
+        for secret in ("hookSecret9", "hcKey7"):
+            self.assertNotIn(secret, html)
+        self.assertIn("hooks.slack.com", html)
+
+    def test_denied_ui_access_is_a_security_event(self):
+        from django_observatory.models import SecurityEvent
+
+        self.client.force_login(self.plain)
+        self.assertEqual(self.client.get("/observability/api/requests/").status_code, 403)
+        self.assertTrue(SecurityEvent.objects.filter(event="PERMISSION_DENIED", reason__contains="observability UI").exists())

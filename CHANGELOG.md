@@ -5,6 +5,35 @@ and the project uses [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+### Security
+- Redaction: the key=value pattern could backtrack cubically, so a crafted few-KB request path or header
+  pinned a worker's CPU for seconds to minutes. Its repeats are now bounded (16 KB worst case: ~0.1 s).
+- URL paths are stored with credential-looking segments masked: long letter+digit runs such as webhook
+  and bot tokens in outbound calls, and URL kwargs with sensitive names (e.g. the password-reset `<token>`)
+  in request paths, breadcrumbs, referrers and security events.
+- The audit hash chain is now an HMAC keyed with `SECRET_KEY` (`SECRET_KEY_FALLBACKS` honoured), so write
+  access to the table alone can no longer forge rows that verify. Rows written before this release keep
+  their unkeyed hash and still verify, but only before the first keyed row.
+- `PERMISSION_MODE = "permissions"`: incident pages, the dashboard, request and trace detail no longer show
+  requests, exceptions, SQL or security evidence to viewers without that section's permission. Exception
+  breadcrumbs from the log, security, audit and request sections are hidden (page, API, export) from
+  viewers who lack that section; audit breadcrumbs are hidden in the default mode too.
+- Security incidents no longer name the source IP in `probable_cause`; it stays in the evidence list.
+- Settings page: `ALERTS.WEBHOOK_URL`, the OTLP endpoint path and all OTLP header values are masked.
+- Webhook alerts escape `&`, `<`, `>`, markdown links and `@everyone`/`@here`/`@channel`, so exception
+  text cannot inject links or mass mentions into chat.
+- 401/403 responses from the observability UI itself are recorded as `PERMISSION_DENIED` security events.
+
+### Changed
+- `REQUESTS.TRUST_PROXY_HEADERS` reads the client IP from the right of `X-Forwarded-For` (`True` = one
+  trusted proxy, an integer = that many) and validates it; it used to take the leftmost, client-controlled
+  entry. Set it to the number of proxies in front of Django (e.g. `2` for CDN + nginx).
+
+### Fixed
+- `migrate` on a fresh database (seen on SQL Server) printed `pipeline.write: dropped … rows` and
+  `scheduler: tick failed … Invalid object name 'django_observatory_…'`: events logged before this app's
+  tables existed were written anyway. Writes and scheduler jobs now wait quietly until the tables exist.
+
 ## 0.1.4 - 2026-11-21
 
 ### Added

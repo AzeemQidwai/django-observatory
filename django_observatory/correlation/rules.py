@@ -180,11 +180,11 @@ def rule_security(s, kinds, signals, affected):
     concentrated = top_ip and top_n / total >= 0.5
     if event == "LOGIN_FAILURE":
         title = "Failed login spike"
-        cause = f"Possible credential attack from {top_ip}" if concentrated else "Failed login spike across many sources"
+        cause = "Possible credential attack from a single address" if concentrated else "Failed login spike across many sources"
         rec = "Review the security events; consider rate limiting or blocking the source address."
     else:
         title = "Permission denied spike"
-        cause = f"Repeated forbidden access attempts from {top_ip}" if concentrated else "Permission denied spike"
+        cause = "Repeated forbidden access attempts from a single address" if concentrated else "Permission denied spike"
         rec = "Check whether a release changed permissions, or whether an account is probing endpoints."
     h = Hypothesis("security", event, title, cause, rec, "security", event)
     h.add(0.4, sig["description"])

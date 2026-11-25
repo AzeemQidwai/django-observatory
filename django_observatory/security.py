@@ -33,7 +33,7 @@ def record(event, *, resource="", reason="", user=None, username="", ip="", seve
     if request is not None:
         agent = request.META.get("HTTP_USER_AGENT", "")
         ip = ip or request.META.get("REMOTE_ADDR", "")
-        resource = resource or request.path
+        resource = resource or redaction.url_path(request.path)
     if ctx is not None:
         ctx.security_recorded = True
         ctx.crumb("security", f"{event} {resource}".strip(), "warning")

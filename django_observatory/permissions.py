@@ -31,6 +31,19 @@ def allowed(user, perm="view_observability"):
     return user.is_staff
 
 
+# breadcrumbs copy data from other sections into exception records; show each only to its section's viewers
+_CRUMB_PERMS = {"log": "view_logs", "security": "view_security_events", "audit": "view_audit_events",
+                "request": "view_requests"}
+
+
+def visible_crumbs(user, crumbs):
+    out = []
+    for c in crumbs or ():
+        perm = _CRUMB_PERMS.get(c.get("category")) if isinstance(c, dict) else None
+        out.append(c if perm is None or allowed(user, perm) else {**c, "message": f"(hidden: requires {perm})"})
+    return out
+
+
 def granted(user):
     """{perm: bool} for templates (navigation only shows what the user may open)."""
     return {p: allowed(user, p) for p in ALL}

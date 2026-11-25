@@ -87,7 +87,7 @@ LOGGING = {
 | `CAPTURE_BODY` | `False` | Store form fields, or the first `MAX_BODY_BYTES` of other bodies. Multipart is never stored. |
 | `MAX_BODY_BYTES` | `4096` | Limit for non-form bodies. |
 | `TRUST_REQUEST_ID_HEADER` | `False` | Reuse an incoming `X-Request-ID` (only safe characters, 8–64 long). |
-| `TRUST_PROXY_HEADERS` | `False` | Take the client IP from `X-Forwarded-For`. Enable only behind a trusted proxy. |
+| `TRUST_PROXY_HEADERS` | `False` | Take the client IP from `X-Forwarded-For`. `True` = one trusted proxy (e.g. nginx); an integer = that many trusted proxies in front of Django (e.g. `2` for CDN + nginx). The address is read that many entries from the right, since everything further left is client-supplied. Enable only behind a trusted proxy. |
 
 The UI's own URLs are never observed.
 

@@ -4,6 +4,7 @@ Place it as early as possible in MIDDLEWARE so it times the whole stack. Every h
 wrapped: an internal failure is reported on the internal logger and the request goes on.
 """
 import hashlib
+import ipaddress
 import time
 
 from asgiref.sync import iscoroutinefunction, markcoroutinefunction
@@ -41,10 +42,16 @@ def _resolved_user(request):
 
 
 def _client_ip(request):
-    if conf.get("REQUESTS", "TRUST_PROXY_HEADERS"):
-        fwd = request.META.get("HTTP_X_FORWARDED_FOR")
-        if fwd:
-            return fwd.split(",")[0].strip()[:45]
+    hops = int(conf.get("REQUESTS", "TRUST_PROXY_HEADERS") or 0)  # True = one trusted proxy
+    fwd = request.META.get("HTTP_X_FORWARDED_FOR") if hops > 0 else None
+    if fwd:
+        # proxies append, so only the rightmost `hops` entries were written by them; the rest is client-sent
+        parts = [p.strip() for p in fwd.split(",")]
+        if len(parts) >= hops:
+            try:
+                return str(ipaddress.ip_address(parts[-hops]))
+            except ValueError:
+                pass
     return request.META.get("REMOTE_ADDR", "") or ""
 
 
@@ -97,6 +104,8 @@ class ObservabilityMiddleware:
                 match = request.resolver_match
                 if match is not None:
                     ctx.route = "/" + (match.route or "").lstrip("^/").rstrip("$")
+                    # e.g. PasswordResetConfirmView's <token>: never store it with the path
+                    ctx.path_secrets = tuple(str(v) for k, v in match.kwargs.items() if redaction.is_sensitive_key(k))
         except Exception as exc:  # noqa: BLE001
             internal.warn("middleware.process_view", "failed", exc)
         return None
@@ -126,6 +135,7 @@ class ObservabilityMiddleware:
             rid = None
             if conf.get("REQUESTS", "TRUST_REQUEST_ID_HEADER"):
                 rid = context.safe_request_id(meta.get("HTTP_X_REQUEST_ID"))
+            path = redaction.url_path(path)
             ctx = context.TraceContext(path, "request", trace_id, parent or "", rid)
             ctx.method = request.method or ""
             ctx.ip = _client_ip(request)
@@ -139,6 +149,10 @@ class ObservabilityMiddleware:
     def _end(self, request, state, response, exc=None):
         if state[0] == "suppress":
             context._suppress.reset(state[1])
+            if response is not None and response.status_code in (401, 403):
+                # the UI's own traffic is not observed, but probing it is a security signal
+                security.record("PERMISSION_DENIED", resource=redaction.url_path(request.path),
+                                reason=f"HTTP {response.status_code} (observability UI)", request=request)
             return response
         _, ctx, tokens = state
         t0 = time.perf_counter()
@@ -177,7 +191,8 @@ class ObservabilityMiddleware:
         metrics.histogram("http.duration", duration, {"route": route}, "ms")
 
         if status == 403 and not ctx.security_recorded:
-            security.record("PERMISSION_DENIED", resource=request.path, reason="HTTP 403", request=request)
+            security.record("PERMISSION_DENIED", resource=redaction.url_path(request.path, ctx.path_secrets),
+                            reason="HTTP 403", request=request)
 
         if response is not None and conf.get("REQUESTS", "RESPONSE_HEADERS"):
             response["X-Request-ID"] = ctx.request_id
@@ -188,7 +203,7 @@ class ObservabilityMiddleware:
         cfg = conf.get("REQUESTS")
         snap = {
             "t_end": t_end, "duration": duration, "status": status, "route": route, "method": method,
-            "path": request.path, "meta": request.META, "keep": keep_decision(ctx.error, duration),
+            "path": request.path, "path_secrets": ctx.path_secrets, "meta": request.META, "keep": keep_decision(ctx.error, duration),
             "query": request.GET.dict() if cfg["CAPTURE_QUERY_PARAMS"] else None,
             "body": self._body(request, cfg["MAX_BODY_BYTES"])
             if cfg["CAPTURE_BODY"] and method in ("POST", "PUT", "PATCH") else None,
@@ -235,11 +250,11 @@ def _persist(ctx, snap):
         metadata["body"] = snap["body"]
     view_name, view_module = (ctx.view[0], ctx.view[1]) if ctx.view else ("", "")
     pipeline.enqueue("request", {
-        "timestamp": context.to_dt(ctx.start_wall), "method": method, "path": redaction.text(snap["path"], 500),
+        "timestamp": context.to_dt(ctx.start_wall), "method": method, "path": redaction.url_path(snap["path"], snap["path_secrets"]),
         "route": route, "query_params": redaction.clean(snap["query"]) if snap["query"] is not None else {},
         "status_code": status, "duration_ms": duration, "user_id": ctx.user_id, "username": ctx.username,
         "session_id": ctx.session, "ip_address": ctx.ip, "user_agent": meta.get("HTTP_USER_AGENT", "")[:300],
-        "referrer": redaction.text(meta.get("HTTP_REFERER", "").split("?")[0], 500),
+        "referrer": redaction.url_path(meta.get("HTTP_REFERER", "").split("?")[0]),
         "content_type": snap["content_type"][:100], "response_size": snap["size"],
         "view_name": view_name, "view_module": view_module, "exception_uid": ctx.exception_uid,
         "db_count": ctx.db_count, "db_ms": ctx.db_ms, "slow_queries": ctx.slow_queries,

@@ -1,4 +1,5 @@
 """Default backend: the project's own database through the Django ORM."""
+import time
 from collections import defaultdict
 
 from django.db import connections, models, transaction
@@ -7,7 +8,7 @@ from django.db.models import F, Min
 from .. import conf
 from ..models import (
     Alert, AuditEvent, DatabaseQuery, ExceptionRecord, ExternalCall, Incident, Issue, Metric,
-    MetricSample, ObservabilityEvent, RequestRecord, SecurityEvent, SpanRecord, TraceRecord,
+    MetricSample, ObservabilityConfiguration, ObservabilityEvent, RequestRecord, SecurityEvent, SpanRecord, TraceRecord,
 )
 from .base import ObservabilityBackend
 
@@ -51,6 +52,26 @@ def _fit(model, row):
 class DjangoORMBackend(ObservabilityBackend):
     def __init__(self):
         self._prepared = set()  # connection objects already tuned (one per writer thread)
+        self._ready = False
+        self._checked = -1e9
+
+    def ready(self):
+        """False until ``migrate`` has created this app's tables, e.g. while ``migrate`` itself
+        runs and the project logs before our migration is applied. Re-checked every 5 s."""
+        if self._ready:
+            return True
+        now = time.monotonic()
+        if now - self._checked < 5:
+            return False
+        self._checked = now
+        try:
+            names = connections[self.alias].introspection.table_names()
+        except Exception:  # noqa: BLE001 - database unreachable: let the write path retry and report it
+            self._checked = -1e9
+            return True
+        # ponytail: one table stands in for all; 0001_initial creates them together
+        self._ready = ObservabilityConfiguration._meta.db_table in names
+        return self._ready
 
     def _prepare(self):
         """SQLite only: WAL lets application readers proceed while the worker writes

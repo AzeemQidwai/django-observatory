@@ -188,7 +188,9 @@ class IncidentTests(TestCase):
         s.flush()
         incident, = engine.detect(s.now)
         self.assertEqual((incident.cause_kind, incident.dedup_key.split(":")[0]), ("security", "security"))
-        self.assertIn("10.0.0.9", incident.probable_cause)
+        # the address is evidence (shown only with view_security_events), not part of the headline cause
+        self.assertNotIn("10.0.0.9", incident.probable_cause)
+        self.assertTrue(incident.signals.filter(relationship="evidence", description__contains="10.0.0.9").exists())
 
     def test_graph_and_incident_page(self):
         from django.contrib.auth.models import User
@@ -200,6 +202,10 @@ class IncidentTests(TestCase):
         self.assertTrue({"incident", "external", "metric", "request", "trace"} <= kinds, kinds)
         ids = {n["id"] for n in data["nodes"]}
         self.assertTrue(all(a in ids and b in ids for a, b in data["edges"]))
+        from django_observatory.permissions import ALL
+
+        limited = graph.incident_graph(incident, {p: p == "view_observability" for p in ALL})
+        self.assertFalse({"request", "trace", "user"} & {n["kind"] for n in limited["nodes"]})
         self.client.force_login(User.objects.create_superuser("root", password="pw"))
         resp = self.client.get(f"/observability/incidents/{incident.pk}/")
         self.assertContains(resp, "Inference")

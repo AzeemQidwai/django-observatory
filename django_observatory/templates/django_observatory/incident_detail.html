@@ -15,7 +15,7 @@
 <div style="font-size:1.1rem"><strong>{{ incident.probable_cause }}</strong></div>
 <div class="note">Probable start: <time datetime="{{ incident.started_at|date:'c' }}">{{ incident.started_at|date:'Y-m-d H:i:s' }}</time>{% if incident.resolved_at %} · resolved <time datetime="{{ incident.resolved_at|date:'c' }}">{{ incident.resolved_at|date:'H:i:s' }}</time>{% endif %}</div>
 <div style="margin-top:6px"><strong>Recommended investigation:</strong> {{ incident.recommendation }}</div></div>
-<div class="facts" style="margin-top:12px"><span class="tag">Evidence supporting this inference (observed)</span><ul>{% for s in evidence %}<li>{{ s.description }}</li>{% empty %}<li>No supporting evidence beyond the signals below.</li>{% endfor %}</ul></div>
+<div class="facts" style="margin-top:12px"><span class="tag">Evidence supporting this inference (observed)</span><ul>{% for s in evidence %}<li>{{ s.description }}</li>{% empty %}<li>{% if evidence_hidden %}Hidden: requires {{ evidence_hidden }}.{% else %}No supporting evidence beyond the signals below.{% endif %}</li>{% endfor %}</ul></div>
 {% if incident.alternatives %}<p class="note" style="margin:10px 0 0">Other hypotheses considered: {% for a in incident.alternatives %}{{ a.cause }} ({{ a.confidence }}, {{ a.score }}){% if not forloop.last %}; {% endif %}{% endfor %}.</p>{% endif %}
 <p class="note" style="margin:6px 0 0">The cause is a rule-based inference from correlated telemetry, not a certainty. Verify it against the evidence.</p></div>
 <div class="card"><h2>Correlated signals <span class="note">(observed facts)</span></h2><table><thead><tr><th>Signal</th><th>Role</th><th>Source</th></tr></thead><tbody>

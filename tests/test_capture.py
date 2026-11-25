@@ -4,6 +4,7 @@ import datetime
 import io
 import logging
 import os
+import time
 import unittest
 import urllib.error
 import urllib.request
@@ -93,6 +94,11 @@ class RequestTests(TestCase):
         log = ObservabilityEvent.objects.get(logger_name="tests.app")
         self.assertEqual((log.request_id, log.trace_id), (r.request_id, r.trace_id))
         self.assertEqual(log.metadata, {"password": "[REDACTED]", "normal_field": "hello"})
+
+    def test_path_tokens_are_not_stored(self):
+        self.client.get("/reset/MQ/set-pw-tok/")
+        r = RequestRecord.objects.get()
+        self.assertEqual((r.path, r.route), ("/reset/MQ/[REDACTED]/", "/reset/<uidb64>/<token>/"))
 
     def test_opt_in_capture_is_still_redacted(self):
         with cfg(REQUESTS={"CAPTURE_QUERY_PARAMS": True, "CAPTURE_BODY": True}):
@@ -246,6 +252,12 @@ class ExternalHttpTests(TestCase):
         self.assertEqual((r.ext_count, call.request_id), (1, r.request_id))
         self.assertEqual(SpanRecord.objects.get(kind="http").name, "GET SAP")
 
+    def test_credentials_in_outbound_paths_are_masked(self):
+        from django_observatory.instrumentation import http
+        http.record("POST", "https://hooks.slack.com/services/T0AB12CD/B0AB12CD/9f8XyQ2wLmN3pK7rT5vB1cZa",
+                    time.time(), 5.0, 200)
+        self.assertEqual(ExternalCall.objects.get().path, "/services/T0AB12CD/B0AB12CD/[REDACTED]")
+
     def test_timeout_is_flagged_and_correlated(self):
         def boom(req, data=None):
             raise TimeoutError("timed out")
@@ -309,6 +321,37 @@ class SecurityAuditTests(TestCase):
 
         QuerySet(AuditEvent).filter(pk=a.pk).update(action="CREATE")  # tampering behind the model's back
         self.assertEqual(AuditEvent.verify_chain()[1], [(a.pk, "modified")])
+
+    def test_audit_chain_is_keyed(self):
+        import hashlib
+
+        audit.record("UPDATE", "Material", "A1")
+        last = AuditEvent.objects.get()
+        forged = AuditEvent(action="DELETE", object_type="Material", object_id="A2", username="someone-else",
+                            prev_hash=last.hash)
+        forged.hash = hashlib.sha256(forged._body().encode()).hexdigest()  # what a DB-only attacker can compute
+        forged.save()
+        self.assertEqual(AuditEvent.verify_chain()[1], [(forged.pk, "modified")])
+
+    def test_audit_chain_accepts_pre_upgrade_unkeyed_rows(self):
+        import hashlib
+
+        old = AuditEvent(action="UPDATE", object_type="M", object_id="1")
+        old.hash = hashlib.sha256(old._body().encode()).hexdigest()
+        old.save()
+        audit.record("UPDATE", "Material", "A1")
+        self.assertEqual(AuditEvent.verify_chain(), (2, []))
+
+    def test_client_ip_comes_from_the_trusted_proxy_hop(self):
+        xff = "6.6.6.6, 1.2.3.4"
+        for setting, expected in ((True, "1.2.3.4"), (2, "6.6.6.6"), (False, "127.0.0.1"), (3, "127.0.0.1")):
+            RequestRecord.objects.all().delete()
+            with cfg(REQUESTS={"TRUST_PROXY_HEADERS": setting}):
+                self.client.get("/ok/", HTTP_X_FORWARDED_FOR=xff)
+            self.assertEqual(RequestRecord.objects.get().ip_address, expected, setting)
+        with cfg(REQUESTS={"TRUST_PROXY_HEADERS": True}):
+            self.client.get("/ok/", HTTP_X_FORWARDED_FOR="not-an-ip")
+        self.assertEqual(RequestRecord.objects.latest("timestamp").ip_address, "127.0.0.1")
 
     def test_admin_changes_are_audited(self):
         User.objects.create_superuser("root", password="pw")
@@ -455,6 +498,25 @@ class PipelineTests(TransactionTestCase):
             self.assertFalse(pipeline.pipeline.health()["worker_alive"])
             self.assertEqual(ObservabilityEvent.objects.filter(message__startswith="drained").count(), 10)
 
+    def test_unmigrated_tables_drop_quietly(self):
+        """``migrate`` on a fresh database logs before our tables exist: no write, no warning."""
+        from django_observatory import internal
+        from django_observatory.storage.django import DjangoORMBackend
+
+        with override_settings(OBSERVABILITY=SYNC):
+            backend = DjangoORMBackend()
+            before = internal.errors["count"]
+            with mock.patch("django_observatory.pipeline.get_backend", return_value=backend), \
+                    mock.patch.object(connection.introspection, "table_names", return_value=[]), \
+                    mock.patch.object(DjangoORMBackend, "write_batch") as write:
+                observe.info("during migrate")
+                self.assertFalse(write.called)
+            self.assertEqual(internal.errors["count"], before)
+            backend._checked = -1e9  # tables now exist: next check sees them and writes resume
+            with mock.patch("django_observatory.pipeline.get_backend", return_value=backend):
+                observe.info("after migrate")
+            self.assertEqual(list(ObservabilityEvent.objects.values_list("message", flat=True)), ["after migrate"])
+
     @unittest.skipUnless(hasattr(os, "fork"), "POSIX only")
     def test_forked_child_starts_with_a_fresh_queue(self):
         with override_settings(OBSERVABILITY=self.ASYNC):
@@ -573,6 +635,15 @@ class ExternalHttpWrapperTests(TestCase):
             # Keyword arg 'fullurl' should not raise TypeError
             resp2 = wrapped(opener, fullurl="https://httpbin.org/get")
             self.assertEqual(resp2.status, 200)
+
+
+class WebhookTextTests(TestCase):
+    def test_untrusted_text_cannot_inject_markup_or_mentions(self):
+        from django_observatory.alerts import _chat_safe
+
+        out = _chat_safe("ValueError: <!channel> <https://evil.example|re-login> [click](https://evil.example) @everyone")
+        for bad in ("<!channel>", "<https://", "](", "@everyone"):
+            self.assertNotIn(bad, out)
 
 
 class AlertsAndSchedulerTests(TestCase):

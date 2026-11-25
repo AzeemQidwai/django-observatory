@@ -120,13 +120,20 @@ def _email(subject, body, payload):
         send_mail(subject, body, getattr(settings, "DEFAULT_FROM_EMAIL", None), list(to), fail_silently=False)
 
 
+def _chat_safe(s):
+    """Alert text carries exception messages (attacker input): stop Slack's <url|label> / <!channel>,
+    markdown links and @everyone/@here from being interpreted as markup or mentions."""
+    s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("](", "] (")
+    return s.replace("@everyone", "@\u200beveryone").replace("@here", "@\u200bhere").replace("@channel", "@\u200bchannel")
+
+
 def _webhook(subject, body, payload):
     url = conf.get("ALERTS", "WEBHOOK_URL")
     if url:
         if not (isinstance(url, str) and url.startswith(("http://", "https://"))):
             internal.warn("alerts.webhook", f"invalid webhook scheme: {url}")
             return
-        data = json.dumps({"text": f"{subject}\n{body}", **payload}, default=str).encode()
+        data = json.dumps({"text": _chat_safe(f"{subject}\n{body}"), **payload}, default=str).encode()
         req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
         urllib.request.urlopen(req, timeout=5).close()  # noqa: S310 - operator-configured URL
 

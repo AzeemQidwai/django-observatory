@@ -82,6 +82,7 @@ class TraceContext:
         self.error = False
         self.security_recorded = False
         self.route = ""
+        self.path_secrets = ()
         self.method = ""
         self.view = None  # (name, module, perf_counter at view start)
         self.breadcrumbs = deque(maxlen=conf.get("BREADCRUMBS") or 30)

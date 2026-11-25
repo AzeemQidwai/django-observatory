@@ -3,6 +3,7 @@ import datetime
 import platform
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import django
 from django.db import connections
@@ -236,7 +237,8 @@ def dashboard(request):
                      for r, a in routes.items() if a.count], "db", 8)
     exc_url = reverse("django_observatory:exceptions")
     exc_types = _bars([(t, a.sum, f"{a.sum:,.0f}", f"{a.sum:,.0f} occurrences", f"{exc_url}?range={key}&q=type:{t}")
-                       for t, a in metrics.by_label("exceptions", "type", start, end).items()], "critical", 8)
+                       for t, a in metrics.by_label("exceptions", "type", start, end).items()], "critical", 8) \
+        if perms["view_exceptions"] else []
     charts = [
         ("Requests by status", "c-req", _stacked("http.requests", "status", start, end, step,
                                                   [("2xx", "good"), ("3xx", "neutral"), ("4xx", "warning"), ("5xx", "critical")])),
@@ -257,7 +259,8 @@ def dashboard(request):
     return _page(request, "dashboard.html", {
         "range": key, "tiles": tiles, "charts": charts, "slowest": slowest, "busiest": busiest, "exc_types": exc_types,
         "incidents": Incident.objects.exclude(status="RESOLVED").order_by("-detected_at")[:5],
-        "issues": Issue.objects.filter(status__in=("OPEN", "REGRESSED")).order_by("-last_seen")[:6],
+        "issues": Issue.objects.filter(status__in=("OPEN", "REGRESSED")).order_by("-last_seen")[:6]
+        if perms["view_exceptions"] else [],
         "empty": not total and not ObservabilityEvent.objects.exists(),
     }, "dashboard")
 
@@ -296,7 +299,7 @@ def table_view(request, key):
     if fmt:
         if fmt not in exporters.FORMATS:
             raise Http404
-        return permissions.check(request, "export_observability_data") or exporters.response(qs, fmt, key)
+        return permissions.check(request, "export_observability_data") or exporters.response(qs, fmt, key, request.user)
     try:
         page = max(int(request.GET.get("page", 1)), 1)
     except ValueError:
@@ -334,7 +337,7 @@ def api_list(request, key):
     except ValueError:
         return JsonResponse({"error": "limit and offset must be integers"}, status=400)
     rows = list(qs[offset: offset + limit + 1])
-    return JsonResponse({"results": [exporters.serialize(o) for o in rows[:limit]],
+    return JsonResponse({"results": [exporters.serialize(o, user=request.user) for o in rows[:limit]],
                          "next_offset": offset + limit if len(rows) > limit else None})
 
 
@@ -344,7 +347,7 @@ def api_detail(request, key, pk):
         raise Http404
     if not permissions.allowed(request.user, table.perm):
         return JsonResponse({"error": "forbidden"}, status=403 if request.user.is_authenticated else 401)
-    return JsonResponse(exporters.serialize(get_object_or_404(table.model, pk=pk)))
+    return JsonResponse(exporters.serialize(get_object_or_404(table.model, pk=pk), user=request.user))
 
 
 def api_metrics(request):
@@ -406,8 +409,9 @@ def request_detail(request, request_id):
     spans = list(SpanRecord.objects.filter(trace_id=req.trace_id).order_by("offset_ms")[:600])
     queries = list(DatabaseQuery.objects.filter(request_id=request_id).order_by("timestamp")[:300])
     externals = list(ExternalCall.objects.filter(request_id=request_id).order_by("timestamp")[:100])
-    exceptions = list(ExceptionRecord.objects.filter(request_id=request_id).select_related("issue")[:10])
     perms = permissions.granted(request.user)
+    exceptions = list(ExceptionRecord.objects.filter(request_id=request_id).select_related("issue")[:10]) \
+        if perms["view_exceptions"] else []
     return _page(request, "request_detail.html", {
         "req": req, "waterfall": _waterfall(spans, req.duration_ms), "queries": queries, "externals": externals,
         "exceptions": exceptions, "why": causal.explain(req, externals, queries, exceptions),
@@ -416,7 +420,7 @@ def request_detail(request, request_id):
         if perms["view_logs"] else [],
         "security": SecurityEvent.objects.filter(request_id=request_id)[:20] if perms["view_security_events"] else [],
         "audits": AuditEvent.objects.filter(request_id=request_id)[:20] if perms["view_audit_events"] else [],
-        "graph": graph.request_graph(req),
+        "graph": graph.request_graph(req, perms),
     }, "requests")
 
 
@@ -431,18 +435,21 @@ def trace_detail(request, trace_id):
         if s.kind in ("db", "http", "template"):
             kinds[s.kind] = kinds.get(s.kind, 0) + s.duration_ms
     top = max(spans, key=lambda s: s.duration_ms if s.kind in ("db", "http") else -1, default=None)
+    perms = permissions.granted(request.user)
     return _page(request, "trace_detail.html", {
         "trace": trace, "waterfall": _waterfall(spans, trace.duration_ms),
         "dominant": top if top is not None and top.kind in ("db", "http")
         and top.duration_ms >= trace.duration_ms * 0.4 else None,
-        "exceptions": ExceptionRecord.objects.filter(trace_id=trace_id)[:10],
-        "request_record": RequestRecord.objects.filter(request_id=trace.request_id).first() if trace.request_id else None,
+        "exceptions": ExceptionRecord.objects.filter(trace_id=trace_id)[:10] if perms["view_exceptions"] else [],
+        "request_record": RequestRecord.objects.filter(request_id=trace.request_id).first()
+        if trace.request_id and perms["view_requests"] else None,
     }, "traces")
 
 
 @require("view_exceptions")
 def exception_detail(request, pk):
     exc = get_object_or_404(ExceptionRecord.objects.select_related("issue"), pk=pk)
+    exc.breadcrumbs = permissions.visible_crumbs(request.user, exc.breadcrumbs)
     return _page(request, "exception_detail.html", {"exc": exc}, "exceptions")
 
 
@@ -484,6 +491,9 @@ def issue_detail(request, pk):
     }, "issues")
 
 
+_CAUSE_PERMS = {"database": "view_metrics", "security": "view_security_events", "exception": "view_exceptions"}
+
+
 @require()
 def incident_detail(request, pk):
     incident = get_object_or_404(Incident, pk=pk)
@@ -515,15 +525,20 @@ def incident_detail(request, pk):
     else:
         charts.append(("HTTP 5xx responses", "i-err", _chart(
             metrics.timeseries("http.requests", start, chart_end, step, status="5xx"), "", errors=lambda a: a.sum)))
+    perms = permissions.granted(request.user)
+    # evidence quotes the cause's own section (SQL, source IPs, exception text): same permission as that section
+    evidence_perm = _CAUSE_PERMS.get(incident.cause_kind)
     return _page(request, "incident_detail.html", {
         "incident": incident, "charts": charts,
         "observed": [s for s in signals if s.relationship != "evidence"],
-        "evidence": [s for s in signals if s.relationship == "evidence"],
-        "requests": reqs.order_by("-status_code", "-duration_ms")[:15],
+        "evidence": [s for s in signals if s.relationship == "evidence"]
+        if not evidence_perm or perms[evidence_perm] else [],
+        "evidence_hidden": evidence_perm if evidence_perm and not perms[evidence_perm] else "",
+        "requests": reqs.order_by("-status_code", "-duration_ms")[:15] if perms["view_requests"] else [],
         "exceptions": ExceptionRecord.objects.filter(timestamp__gte=incident.started_at, timestamp__lte=end)
-        .values("issue_id", "issue__title").annotate(n=Count("id")).order_by("-n")[:8],
+        .values("issue_id", "issue__title").annotate(n=Count("id")).order_by("-n")[:8] if perms["view_exceptions"] else [],
         "alerts": incident.alerts.select_related("rule")[:20],
-        "graph": graph.incident_graph(incident), "statuses": Incident.Status.values,
+        "graph": graph.incident_graph(incident, perms), "statuses": Incident.Status.values,
     }, "incidents")
 
 
@@ -856,7 +871,16 @@ def settings_view(request):
                 return denied
             deleted = maintenance.cleanup()
             message = f"Retention cleanup removed {sum(deleted.values())} rows."
-    cfg = redaction.clean(conf.all())
+    cfg = redaction.clean(conf.all())  # returns copies, safe to mask below
+    # credentials that no key name gives away: webhook secrets live in the URL, vendor keys in OTLP headers
+    for section, key in (("ALERTS", "WEBHOOK_URL"), ("OTEL", "endpoint")):
+        url = (cfg.get(section) or {}).get(key)
+        if url:
+            parts = urlsplit(str(url))
+            cfg[section][key] = f"{parts.scheme}://{parts.hostname or ''}/{redaction.REDACTED}"
+    headers = (cfg.get("OTEL") or {}).get("headers")
+    if isinstance(headers, dict):
+        cfg["OTEL"]["headers"] = {k: redaction.REDACTED for k in headers}
     row = Cfg.objects.filter(key="runtime").first()
     runtime = (row.value if row else None) or {}
     return _page(request, "settings.html", {

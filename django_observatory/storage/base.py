@@ -8,6 +8,10 @@ class ObservabilityBackend:
     KINDS = ("event", "request", "trace", "span", "exception", "query", "external",
              "security", "audit", "metric")
 
+    def ready(self):
+        """False while the backend cannot accept writes yet (its tables are not migrated)."""
+        return True
+
     def write(self, kind, rows):
         """Persist a batch. Must be atomic per call (the pipeline retries whole batches)."""
         raise NotImplementedError

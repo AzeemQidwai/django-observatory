@@ -23,10 +23,13 @@ to users who hold those permissions.
 
 `AuditEvent` rows are append-only: the model refuses `save()` on existing rows, `delete()`, and queryset
 `update()` / `delete()`; the admin registration is read-only; the UI offers no edit or delete. Each row
-stores `hash = sha256(prev_hash + canonical payload)`. **Audit → Verify integrity** (or
-`AuditEvent.verify_chain()`) reports modified rows and broken links. Only retention cleanup removes audit
-rows, oldest first. For stronger guarantees grant the database user no `UPDATE`/`DELETE` on the audit table
-and export it regularly.
+stores `hash = HMAC-SHA256(SECRET_KEY, prev_hash + canonical payload)`, so someone with write access to the
+database but not to `SECRET_KEY` cannot forge rows that verify (rotate keys via `SECRET_KEY_FALLBACKS`, or
+older rows stop verifying). **Audit → Verify integrity** (or `AuditEvent.verify_chain()`) reports modified
+rows and broken links. Rows written before 0.1.5 carry an unkeyed SHA-256 and are accepted only before the
+first keyed row. Only retention cleanup removes audit rows, oldest first. The chain cannot detect the newest
+rows being deleted: for that, and for stronger guarantees, grant the database user no `UPDATE`/`DELETE` on
+the audit table and export it (or its latest hash) regularly.
 
 ## Web hardening
 

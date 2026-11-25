@@ -45,7 +45,7 @@ DEFAULTS = {
         "IGNORE_USER_AGENTS": [],
         "RESPONSE_HEADERS": True,  # X-Request-ID / X-Trace-ID
         "TRUST_REQUEST_ID_HEADER": False,
-        "TRUST_PROXY_HEADERS": False,  # use X-Forwarded-For for client IP
+        "TRUST_PROXY_HEADERS": False,  # True or N: client IP from X-Forwarded-For, N trusted proxies deep
         "SLOW_MS": 1000,
     },
     "DATABASE": {
