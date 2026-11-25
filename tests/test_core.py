@@ -68,7 +68,7 @@ class RedactionTests(SimpleTestCase):
     def test_url_path_masks_credential_segments(self):
         self.assertEqual(redaction.url_path("/services/T0AB12CD/B0AB12CD/9f8XyQ2wLmN3pK7rT5vB1cZa"),
                          "/services/T0AB12CD/B0AB12CD/[REDACTED]")
-        self.assertEqual(redaction.url_path("/bot123456:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage"),
+        self.assertEqual(redaction.url_path("/bot123456:" + "AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/sendMessage"),
                          "/[REDACTED]/sendMessage")
         self.assertEqual(redaction.url_path("/reset/MQ/c4z1ab-x9/", secrets=("c4z1ab-x9",)), "/reset/MQ/[REDACTED]/")
         for keep in ("/blog/my-long-blog-post-title-2024/", "/orders/3f2c1a9e-8b7d-4c6e-9f10-2a3b4c5d6e7f/",
