@@ -3,7 +3,7 @@
 All notable changes are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/),
 and the project uses [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.1.5 - 2026-11-25
 
 ### Security
 - Redaction: the key=value pattern could backtrack cubically, so a crafted few-KB request path or header
